@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# docs-rag-eval: corpus, indexes, caches and secrets
+data/
