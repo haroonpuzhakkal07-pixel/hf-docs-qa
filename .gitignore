@@ -221,3 +221,6 @@ __marimo__/
 
 # docs-rag-eval: corpus, indexes, caches and secrets
 data/
+
+/tmp/
+/output/
