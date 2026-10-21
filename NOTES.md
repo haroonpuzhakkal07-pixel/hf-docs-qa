@@ -2,131 +2,97 @@
 
 ## Decisions
 
-- Use Python 3.11.9 in `.venv`, matching the plan's Python 3.11 target.
-- Pin the Transformers corpus to `469230357aab0f2b303b0d638c1f8d06edb14184` so selection and evaluation refer to a fixed version.
-- Select pages by useful source content, without page limits, folder exclusions or model quotas.
-- Keep short pages and pages containing API directives when they also contain useful facts, explanations, examples or tables.
-- Preserve similar model pages so evaluation can test whether retrieval distinguishes their differences.
-- Track `data/selection_report.csv` while keeping downloaded corpus files and generated data ignored.
-- Retain source pages with localized quality issues; document those issues and avoid disputed details in gold answers.
+- Use Python 3.11 in `.venv`; the current development environment is Python 3.11.9.
+- Pin the documentation corpus so selection, retrieval and evaluation use the same source version. See README for the commit.
+- Select pages by useful content, without page limits, folder exclusions or model quotas. Short pages, API-containing pages and similar model pages remain eligible.
+- Track selection decisions and evidence; ignore downloaded sources, generated datasets and local scratch files.
+- Preserve source facts, examples and caveats during ingestion. Remove leading metadata and convert tab wrappers into labels without changing their contents.
+- Use relative source paths as document IDs. Extract titles outside comments and fenced code, with explicit fallbacks for reviewed exceptions.
+- Retain remaining markup for the retrieval baseline. Further cleaning should address observed retrieval failures and be evaluated for information loss.
 
 ## What failed
 
-- Earlier Day 2 and Day 3 work was reverted, but ignored local outputs remained. Archived the old selection draft and processed outputs under `tmp/pre-day2-backup` before restarting.
-- Survey previews sometimes captured metadata, badges, citations or boilerplate instead of useful content. Inspected additional source before deciding.
-- Long terminal output was cut off during sharing. Switched to saving review output under `tmp/`.
+- Reverting earlier work left ignored outputs locally. Archived them during recovery, then deleted the obsolete backup after validating the replacement pipeline.
+- Source previews sometimes showed boilerplate instead of useful content. Inspected additional source before making uncertain selection decisions.
+- Initial license matching missed malformed, extra-hyphen and multiline headers. Expanded recognition and added regression tests.
+- The heading survey mistook a fenced Python comment for Qwen3-Next's title. Fence-aware extraction identified the missing H1; added a fallback.
+- A difflib-based audit misaligned repeated code-fence lines. Replaced it with sequential comparison to verify content preservation.
 
 ## Questions
 
-- How should dependencies be separated into direct requirements and a reproducible environment snapshot? The current `requirements.txt` came from `pip freeze`. Review portability before Docker (Day 26) and the fresh-clone test (Day 34).
+- How should direct dependencies and the reproducible environment snapshot be separated? `requirements.txt` currently comes from `pip freeze`; review portability before Docker on Day 26 and the fresh-clone test on Day 34.
+- Does retained markup produce low-information chunks or retrieval misses? Inspect retrieval failures before adding more cleaning rules.
 
-## Daily log
+## Corpus observations
 
-End every session with three lines: did / broke / next.
+### Selection
 
-### Day 1
+- Reviewed 752 Markdown pages: 740 included, 12 excluded, none pending.
+- All 531 model pages met the inclusion criteria.
+- Include explanations, model facts, usage guidance, code examples and meaningful tables.
+- Exclude pages containing only navigation, file pointers, headings, boilerplate or API scaffolding without useful source content.
+- Per-page decisions, reasons and evidence are in `data/selection_report.csv`; selected paths are in `src/config.py`.
+- Review used source previews and additional inspection where needed. Every exclusion was manually reviewed; inclusion does not certify source correctness.
 
-- did: Created the repository scaffold and Python 3.11.9 environment; verified `sentence_transformers`, `faiss` and `rank_bm25` imports.
-- broke: Earlier Day 2 and Day 3 work was reverted; ignored outputs remained locally and were archived before restarting.
-- next: Restart Day 2 using content-based selection criteria; review all 752 pages and record a decision and reason for each.
+### Formatting quirks
 
-### Day 2
+The initial random sample covered `efficientloftr.md`, `pp_ocrv6_medium_det.md`, `depth_anything.md`, `patchtsmixer.md` and `laguna.md` under `model_doc/`; all five were included.
 
-#### Corpus and selection
+- Leading license comments vary in formatting; CWM uses malformed `<--`. Publication/contribution metadata can precede the title.
+- Five selected pages lack an H1 outside code and comments; ingestion uses explicit title fallbacks.
+- HTML badges, images, layout wrappers, callouts and collapsible sections appear alongside Markdown.
+- Tab labels provide context for alternative examples; preserve them when removing wrappers.
+- Fences may be indented or use long delimiters around shorter nested fences. Code, tables and technical links contain useful evidence.
+- Autodoc directives reference generated API documentation that is absent from the Markdown source.
 
-- Repository: https://github.com/huggingface/transformers
-- Commit: `469230357aab0f2b303b0d638c1f8d06edb14184`
-- Source directory: `docs/source/en`
-- Decisions and evidence: `data/selection_report.csv`
-- Selected paths: `src/config.py`
+### Source quality
 
-Include answer-bearing explanations, model facts, usage guidance, code examples or meaningful tables. Exclude pages consisting only of navigation/resource directories, file pointers, headings, boilerplate or API placeholders without useful source content.
+- Examples can contain syntax errors, undefined variables or placeholder checkpoints. PatchTSMixer provides one observed example.
+- DeepSeek-V2 contains conflicting training-token counts.
+- ImageGPT's model-size table lists MiT variants.
+- DeepSeek-V3 includes examples referring to DeepSeek-R1.
+- Some links have empty targets, and release-time installation notices remain.
 
-Reviewed 752 pages: **740 included, 12 excluded, 0 pending**.
-All 531 model pages met the inclusion criteria.
+Preserve these source details, but avoid disputed claims in gold answers. Answers should refer to the pinned corpus rather than assume current software behavior.
 
-| Folder | Include | Exclude |
-| --- | ---: | ---: |
-| (root) | 93 | 4 |
-| community_integrations | 16 | 0 |
-| internal | 6 | 6 |
-| kernel_doc | 3 | 0 |
-| main_classes | 21 | 2 |
-| model_doc | 531 | 0 |
-| quantization | 29 | 0 |
-| reference | 1 | 0 |
-| serve-cli | 6 | 0 |
-| tasks | 34 | 0 |
-| **Total** | **740** | **12** |
+## Evaluation candidates
 
-Review used source previews for clear inclusion evidence and additional source inspection where needed. Every exclusion was manually reviewed. Inclusion does not certify every source claim or code example.
+Dates below are contribution metadata in the pinned source, not independently verified Git addition dates. These are candidates, not selection quotas.
 
-Validation passed:
-
-- Report covers all 752 source paths without duplicates or unknown paths.
-- Every row has a valid decision, reason and evidence.
-- Raw corpus checkout is clean and matches the pin.
-- Config imports successfully and contains 740 unique, existing file paths.
-
-#### Source inspection
-
-Initial random sample, all under `model_doc/`:
-
-- `efficientloftr.md`
-- `pp_ocrv6_medium_det.md`
-- `depth_anything.md`
-- `patchtsmixer.md`
-- `laguna.md`
-
-All five contained useful explanations, model facts or examples and were included.
-
-Observed formatting quirks:
-
-- Leading multiline HTML comments contain license text and doc-builder notices.
-- Publication/contribution metadata can appear before the title.
-- Some titles start at H2 or lack a dedicated H1; Day 3 needs a title fallback.
-- HTML badges, images and layout wrappers are mixed with Markdown.
-- `hfoptions` and `hfoption` tags wrap alternative usage examples.
-- `autodoc` directives are placeholders; expanded Python docstrings are absent from the Markdown source.
-- TIP callouts can mix useful guidance with website navigation instructions.
-- Code fences may be indented, use different language labels, or contain six backticks around nested shorter fences.
-- Markdown tables contain useful configuration, benchmark and usage facts.
-- Links include relative paths and special API cross-references.
-- CWM's license header starts with malformed `<--`, so standard HTML-comment removal misses it.
-
-#### Evaluation candidates
-
-Dates below are contribution metadata in the pinned source, not independently verified Git addition dates. These are evaluation candidates, not selection quotas.
-
-| Page | Source contribution date | Potential evaluation topic |
+| Page under model_doc/ | Source contribution date | Potential topic |
 | --- | --- | --- |
-| model_doc/gte.md | 2026-09-30 | Padding and `position_ids` requirements |
-| model_doc/nemotron3_diarization.md | 2026-09-23 | Speaker limits, ordering and latency configuration |
-| model_doc/minicpmv4_7.md | 2026-09-21 | Canvas M-RoPE versus MiniCPM-V 4.6 |
-| model_doc/hyperclovax_vision_v2.md | 2026-09-11 | Language/vision backbones and supported inputs |
-| model_doc/fun_asr_nano.md | 2026-09-08 | Model size, language coverage and ASR usage |
+| gte.md | 2026-09-30 | Padding and position_ids requirements |
+| nemotron3_diarization.md | 2026-09-23 | Speaker limits, ordering and latency |
+| minicpmv4_7.md | 2026-09-21 | Canvas M-RoPE versus MiniCPM-V 4.6 |
+| hyperclovax_vision_v2.md | 2026-09-11 | Backbones and supported inputs |
+| fun_asr_nano.md | 2026-09-08 | Model size, languages and ASR usage |
 
 Similar-page cases:
 
-- Qwen3 versus Qwen3-MoE: dense versus sparse model facts.
-- MiniCPM-V 4.6 versus 4.7: shared components versus canvas M-RoPE.
+- Qwen3 versus Qwen3-MoE: dense versus sparse architecture.
+- MiniCPM-V 4.6 versus 4.7: shared components and architectural changes.
 - Moonshine versus Moonshine Streaming: offline versus incremental processing.
-- PP-LCNet V3 versus V4: backbone availability and architecture distinctions.
-- GLM-V, GLM-4.6V and GLM4vMoE: shared descriptions but different checkpoint support.
+- PP-LCNet V3 versus V4: backbone and architecture differences.
+- GLM-V, GLM-4.6V and GLM4vMoE: similar descriptions with different checkpoint support.
 
-#### Source quality issues
+## Daily log
 
-- Some links have empty targets, such as `[Pixio]()`.
-- Examples may contain syntax errors, placeholder checkpoints or undefined variables.
-- DeepSeek-V2 contains conflicting training-token counts.
-- ImageGPT's model-size table lists MiT variants, inconsistent with its surrounding description.
-- DeepSeek-V3 includes usage examples referring to DeepSeek-R1.
-- Some pages retain release-time installation notices.
+End each session with did / broke / next. Historical next steps describe the plan at that time.
 
-Avoid disputed details in gold answers. Treat answers as specific to the pinned corpus rather than claims about current software behavior.
+### Day 1
 
-#### Session log
+- did: Created the scaffold and Python environment; verified sentence_transformers, faiss and rank_bm25 imports.
+- broke: Earlier work was reverted; ignored outputs required separate cleanup.
+- next: Restart corpus selection using the revised scope.
 
-- did: Selected 740 of 752 pages, generated config, verified corpus pin and paths, and documented source quirks and evaluation candidates. Committed and pushed as `9846bae`.
-- broke: Survey previews sometimes hid useful content behind metadata or boilerplate; additional inspection was required. Recorded source inconsistencies.
-- next: Day 3 ingestion: remove license headers/front matter while preserving useful headings, code and tables; handle observed formatting quirks.
+### Day 2
+
+- did: Reviewed all 752 pages, selected 740, recorded decisions and evidence, verified the corpus pin and paths, and identified evaluation candidates.
+- broke: Some previews obscured useful content; additional inspection resolved uncertain cases.
+- next: Implement ingestion while preserving headings, code and tables.
+
+### Day 3
+
+- did: Generated and verified 740 JSONL documents; read CWM, Qwen3-Next and PatchTSMixer end-to-end. Tab cleanup changed 253 pages, handled 1,927 wrapper lines and preserved 968 labels; all other content remained identical and in order. All 16 tests passed. Removed obsolete local review files, surveys and backup outputs.
+- broke: Header variants, missing titles and misleading diff alignment required corrections recorded above.
+- next: Follow Day 4: fixed-size chunking with the embedding model's tokenizer, then verify that chunks are nonempty and within the token limit.
