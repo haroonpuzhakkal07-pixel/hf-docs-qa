@@ -9,6 +9,8 @@
 - Preserve source facts, examples and caveats during ingestion. Remove leading metadata and convert tab wrappers into labels without changing their contents.
 - Use relative source paths as document IDs. Extract titles outside comments and fenced code, with explicit fallbacks for reviewed exceptions.
 - Retain remaining markup for the retrieval baseline. Further cleaning should address observed retrieval failures and be evaluated for information loss.
+- Pin the embedding tokenizer revision alongside the model name so chunk boundaries are reproducible.
+- Construct chunks from original character spans and count final passages including special tokens. Keep a fixed-size baseline before evaluating structural chunking.
 
 ## What failed
 
@@ -96,3 +98,9 @@ End each session with did / broke / next. Historical next steps describe the pla
 - did: Generated and verified 740 JSONL documents; read CWM, Qwen3-Next and PatchTSMixer end-to-end. Tab cleanup changed 253 pages, handled 1,927 wrapper lines and preserved 968 labels; all other content remained identical and in order. All 16 tests passed. Removed obsolete local review files, surveys and backup outputs.
 - broke: Header variants, missing titles and misleading diff alignment required corrections recorded above.
 - next: Follow Day 4: fixed-size chunking with the embedding model's tokenizer, then verify that chunks are nonempty and within the token limit.
+
+### Day 4
+
+- did: Implemented 300-token windows with 50-token overlap, stable chunk IDs, source offsets and a provenance manifest. Verified all 740 documents produce 5,703 chunks: average 285.99 tokens, range 53–303 including special tokens. Saved-record hashes, metadata, source coverage and token counts passed verification; all 39 tests passed.
+- broke: No blocking failures. Final passage tokenization reached 303 tokens despite 300-token source windows; recounting confirmed every chunk remained below the 400-token limit.
+- next: Implement and compare heading-aware chunking, including handling long code blocks without silently losing content.

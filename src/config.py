@@ -8,6 +8,18 @@ CORPUS_COMMIT = "469230357aab0f2b303b0d638c1f8d06edb14184"
 RAW_DIR = REPO_ROOT / "data" / "raw" / "transformers"
 DOCS_ROOT = RAW_DIR / "docs" / "source" / "en"
 
+
+# Pin the embedding model and tokenizer for reproducible chunking.
+EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
+EMBEDDING_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
+
+# Window size and overlap count content tokens.
+FIXED_CHUNK_SIZE = 300
+FIXED_CHUNK_OVERLAP = 50
+
+# Safety limit counts the final passage, including special tokens.
+MAX_CHUNK_TOKENS = 400
+
 # Paths are relative to DOCS_ROOT and use forward slashes.
 # Reviewed decisions and evidence: data/selection_report.csv.
 INCLUDE = [

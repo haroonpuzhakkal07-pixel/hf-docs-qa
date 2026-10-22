@@ -4,13 +4,14 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 3:
+Implemented through Day 4:
 
-- Reviewed and selected the documentation corpus.
-- Implemented Markdown ingestion and conservative cleaning.
-- Generated 740 document records and added ingestion tests.
+- Reviewed and selected 740 documentation pages.
+- Implemented conservative Markdown ingestion.
+- Implemented fixed-size token chunking with source-character offsets.
+- Generated and verified 5,703 chunks with a provenance manifest.
 
-Chunking, retrieval, answer generation and evaluation are upcoming. There are no retrieval-quality or answer-quality results yet.
+Heading-aware chunking, retrieval, answer generation and evaluation are upcoming. There are no retrieval-quality or answer-quality results yet.
 
 ## Corpus
 
@@ -117,15 +118,77 @@ print(f"Saved and verified {count} documents.")
 
 If verification fails, inspect the candidate before removing it or retrying.
 
+## Fixed-size chunking
+
+Chunking uses the tokenizer for `BAAI/bge-small-en-v1.5`, pinned to revision `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a`.
+
+Download the pinned tokenizer once:
+
+```powershell
+@'
+from transformers import AutoTokenizer
+from src.config import EMBEDDING_MODEL, EMBEDDING_REVISION
+
+AutoTokenizer.from_pretrained(
+    EMBEDDING_MODEL,
+    revision=EMBEDDING_REVISION,
+    use_fast=True,
+)
+print("Tokenizer cached.")
+'@ | .\.venv\Scripts\python.exe -B -
+```
+
+Chunking subsequently loads the tokenizer from the local cache:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m src.chunking
+```
+
+The input is `data/processed/docs.jsonl`. Outputs are:
+
+- `data/processed/chunks_fixed.jsonl`
+- `data/processed/chunks_fixed.manifest.json`
+
+The command refuses to overwrite either output.
+
+### Configuration and records
+
+- Target window: 300 content tokens.
+- Overlap: 50 content tokens.
+- Safety limit: 400 tokens, including special tokens.
+- Token counts are recalculated from each final passage.
+
+Each record contains `chunk_id`, `doc_id`, `path`, `heading_path`, `text`, `token_count`, `start_char` and `end_char`.
+
+Chunk text is an exact source substring. Character offsets are zero-based, with an exclusive end position. Overlapping chunks cover the complete document, including whitespace. `heading_path` is empty for this baseline.
+
+Fixed-size boundaries can split words, code blocks and tables. Structural chunking is a separate comparison; this baseline preserves source coverage rather than section boundaries.
+
+### Verified corpus output
+
+| Metric | Value |
+| --- | ---: |
+| Documents | 740 |
+| Chunks | 5,703 |
+| Average tokens, including special tokens | 285.99 |
+| Minimum tokens | 53 |
+| Maximum tokens | 303 |
+
+All saved chunks passed checks for source coverage, exact text, metadata and token limits.
+
+The manifest records configuration, model revision, corpus commit, Git commit and dirty status, tokenizer package versions, input/output hashes, implementation hashes and aggregate statistics.
+
+`git_dirty: true` means generation used uncommitted project changes. The recorded implementation hashes identify the source bytes used. These statistics describe chunk construction, not retrieval quality.
+
 ## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider
 ```
 
-Tests cover license-header variants, front matter, content preservation, title extraction, empty documents, JSONL writing and tab cleanup.
+Tests cover ingestion, source preservation, token-window boundaries, overlap, token limits, chunk metadata, dataset writing and overwrite protection.
 
-The corpus integration test requires the downloaded source files.
+Chunking tests require the cached pinned tokenizer. The corpus integration test also requires the downloaded source files.
 
 ## Repository layout
 
@@ -133,13 +196,17 @@ The corpus integration test requires the downloaded source files.
 src/
   config.py                 Corpus pin and selected paths
   ingest.py                 Loading, cleaning and JSONL writing
+  chunking.py               Fixed-size chunking and provenance
 tests/
-  test_ingest.py             Ingestion tests
+  test_ingest.py            Ingestion tests
+  test_chunking.py          Chunking and writer tests
 data/
-  selection_report.csv      Tracked selection decisions and evidence
-  CORPUS_VERSION.txt        Local corpus version record
-  raw/transformers/         Downloaded source checkout
-  processed/docs.jsonl      Generated documents
+  selection_report.csv                          Tracked selection decisions and evidence
+  CORPUS_VERSION.txt                            Local corpus version record
+  raw/transformers/                             Downloaded source checkout
+  processed/docs.jsonl                          Generated documents
+  processed/chunks_fixed.jsonl                  Generated chunks
+  processed/chunks_fixed.manifest.json          Generation provenance
 README.md                   Setup, usage and limitations
 NOTES.md                    Decisions, failures and daily progress
 ```
