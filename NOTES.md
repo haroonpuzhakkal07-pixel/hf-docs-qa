@@ -11,6 +11,10 @@
 - Retain remaining markup for the retrieval baseline. Further cleaning should address observed retrieval failures and be evaluated for information loss.
 - Pin the embedding tokenizer revision alongside the model name so chunk boundaries are reproducible.
 - Construct chunks from original character spans and count final passages including special tokens. Keep a fixed-size baseline before evaluating structural chunking.
+- Heading-aware passages keep exact source text separately from the heading-prefixed embedding text. Added fragment formatting must not obscure which characters came from the source.
+- Deviate from Day 5's "never split inside a code fence" rule when necessary to enforce the token limit without truncation. Observed examples include a 2,137-token fenced block and a single 1,267-token line. Preserve oversized blocks as explicitly marked source fragments; balanced formatting does not imply executable code.
+- Treat the minimum chunk size and overlap as preferences. The hard token limit, complete source coverage and preservation of fitting code blocks take priority.
+- Validate fences using delimiter character, length and open/closed state rather than counting triple-backtick pairs. Include the indented and nested patterns observed in this corpus.
 
 ## What failed
 
@@ -19,6 +23,8 @@
 - Initial license matching missed malformed, extra-hyphen and multiline headers. Expanded recognition and added regression tests.
 - The heading survey mistook a fenced Python comment for Qwen3-Next's title. Fence-aware extraction identified the missing H1; added a fallback.
 - A difflib-based audit misaligned repeated code-fence lines. Replaced it with sequential comparison to verify content preservation.
+- Review found that preferred line endings could be inserted into the token-boundary list out of order. Used sorted insertion and extended the regression test to cover indented lines.
+- The first full heading-chunk audit produced three whitespace-only source chunks after oversized code blocks in Janus, model output tracing and torchao. Assigned extra blank separators to the following section while preserving the newline terminating the closing fence. Targeted checks and the repeated full audit passed.
 
 ## Questions
 
@@ -46,6 +52,17 @@ The initial random sample covered `efficientloftr.md`, `pp_ocrv6_medium_det.md`,
 - Tab labels provide context for alternative examples; preserve them when removing wrappers.
 - Fences may be indented or use long delimiters around shorter nested fences. Code, tables and technical links contain useful evidence.
 - Autodoc directives reference generated API documentation that is absent from the Markdown source.
+
+### Day 5 boundary comparison
+
+Inspected the saved fixed and heading-aware chunks for `accelerator_selection.md`.
+
+| Chunker | Chunks | Tokens per chunk | Observation |
+| --- | ---: | --- | --- |
+| Fixed | 3 | 302, 302, 237 | The first chunk ends inside a CUDA command; the second ends before an Intel XPU code block's closing fence. |
+| Heading | 3 | 168, 398, 191 | Separates the introduction from accelerator-order guidance, includes heading context and keeps the fitting code blocks whole. |
+
+Both preserve complete source coverage. This comparison demonstrates boundary behavior, not retrieval quality; the configurations also differ in budget and overlap.
 
 ### Source quality
 
@@ -104,3 +121,9 @@ End each session with did / broke / next. Historical next steps describe the pla
 - did: Implemented 300-token windows with 50-token overlap, stable chunk IDs, source offsets and a provenance manifest. Verified all 740 documents produce 5,703 chunks: average 285.99 tokens, range 53–303 including special tokens. Saved-record hashes, metadata, source coverage and token counts passed verification; all 39 tests passed.
 - broke: No blocking failures. Final passage tokenization reached 303 tokens despite 300-token source windows; recounting confirmed every chunk remained below the 400-token limit.
 - next: Implement and compare heading-aware chunking, including handling long code blocks without silently losing content.
+
+### Day 5
+
+- did: Implemented heading-aware chunking, structural scanning, bounded code fragments, overlap, small-chunk merging and provenance writing. Independently verified the saved dataset across all 740 documents, compared actual boundaries with the fixed baseline and updated README. All 64 tests passed.
+- broke: Boundary insertion and whitespace-only separator chunks required corrections recorded above. Final corpus and saved-file audits reported no issues.
+- next: Follow Day 6: build embeddings and dense indexes for both chunkers using the pinned model, check its query-prefix guidance and inspect retrieval results.

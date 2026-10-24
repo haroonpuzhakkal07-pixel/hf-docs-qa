@@ -4,14 +4,14 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 4:
+Implemented through Day 5:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative Markdown ingestion.
-- Implemented fixed-size token chunking with source-character offsets.
-- Generated and verified 5,703 chunks with a provenance manifest.
+- Implemented fixed-size and heading-aware chunking with source-character offsets.
+- Generated and verified both chunk datasets and their provenance manifests.
 
-Heading-aware chunking, retrieval, answer generation and evaluation are upcoming. There are no retrieval-quality or answer-quality results yet.
+Retrieval, answer generation and evaluation are upcoming. There are no retrieval-quality or answer-quality results yet.
 
 ## Corpus
 
@@ -180,13 +180,75 @@ The manifest records configuration, model revision, corpus commit, Git commit an
 
 `git_dirty: true` means generation used uncommitted project changes. The recorded implementation hashes identify the source bytes used. These statistics describe chunk construction, not retrieval quality.
 
+## Heading-aware chunking
+
+Uses the same cached, pinned tokenizer as the fixed-size baseline.
+
+Generate the dataset from the repository root:
+
+```powershell
+@'
+import json
+
+from src.chunking_heading import write_heading_dataset
+from src.config import REPO_ROOT
+
+manifest = write_heading_dataset(
+    REPO_ROOT / "data" / "processed" / "docs.jsonl",
+    REPO_ROOT / "data" / "processed" / "chunks_heading.jsonl",
+)
+print(json.dumps(manifest["statistics"], indent=2))
+'@ | .\.venv\Scripts\python.exe -B -
+```
+
+Outputs:
+
+- `data/processed/chunks_heading.jsonl`
+- `data/processed/chunks_heading.manifest.json`
+
+The writer refuses to overwrite either output.
+
+### Behavior and records
+
+- Split at H1–H3 headings outside fenced code and HTML comments.
+- Pack content at blank-line boundaries, keeping fitting code blocks whole.
+- Use a soft minimum of 80 tokens; merge eligible neighboring chunks when the combined passage fits.
+- Target 30 content tokens of overlap within long sections where feasible.
+- Enforce a maximum of 400 tokens, including heading prefixes, added formatting and special tokens.
+
+Oversized code blocks must be split to respect the token limit. Prefer sufficiently filled line boundaries; split within an oversized line when necessary. Code fragments remain separate during small-chunk merging.
+
+Records include the baseline metadata plus `heading_paths`, `source_text`, `code_fragment` and `fragment_fence`.
+
+`source_text` is the exact document substring identified by `start_char:end_char`. `text` is the passage to embed: the heading prefix followed by source content. Multiple heading paths are retained when chunks merge.
+
+Oversized code fragments additionally use an outer tilde fence labeled `markdown`, longer than any tilde run in the source block. This quotes the original Markdown fragment without modifying its source text. It does not make partial code executable.
+
+### Verified corpus comparison
+
+| Metric | Fixed | Heading |
+| --- | ---: | ---: |
+| Documents | 740 | 740 |
+| Chunks | 5,703 | 5,771 |
+| Average tokens, including special tokens | 285.99 | 263.00 |
+| Minimum tokens | 53 | 15 |
+| Maximum tokens | 303 | 400 |
+
+The heading dataset contains 604 code fragments and 296 chunks below the soft minimum of 80 tokens. No saved chunk has whitespace-only source content.
+
+Both datasets passed saved-file verification for hashes, metadata, exact source slices, complete character coverage and final token counts. Heading chunks also passed fence-boundary and fragment-format checks.
+
+These configurations differ in size policy, overlap and heading context. Their construction statistics do not establish retrieval quality or isolate the effect of heading boundaries.
+
+The heading manifest records configuration, policies, corpus and model pins, Git state, package versions, input/output hashes, implementation hashes and aggregate statistics.
+
 ## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider
 ```
 
-Tests cover ingestion, source preservation, token-window boundaries, overlap, token limits, chunk metadata, dataset writing and overwrite protection.
+Tests cover ingestion, source preservation, fixed token windows, heading hierarchy, indented and nested fences, oversized code and lines, overlap, small-chunk merging, token limits, metadata, provenance writing and overwrite protection. All 64 tests passed at the end of Day 5 implementation.
 
 Chunking tests require the cached pinned tokenizer. The corpus integration test also requires the downloaded source files.
 
@@ -197,9 +259,13 @@ src/
   config.py                 Corpus pin and selected paths
   ingest.py                 Loading, cleaning and JSONL writing
   chunking.py               Fixed-size chunking and provenance
+  chunking_heading.py       Heading-aware chunking and provenance
+  markdown_structure.py     Source-preserving heading and fence scanning
 tests/
-  test_ingest.py            Ingestion tests
-  test_chunking.py          Chunking and writer tests
+  test_ingest.py                                Ingestion tests
+  test_chunking.py                              Chunking and writer tests
+  test_chunking_heading.py                      Heading chunking and writer tests
+  test_markdown_structure.py                    Heading, fence and block-boundary tests
 data/
   selection_report.csv                          Tracked selection decisions and evidence
   CORPUS_VERSION.txt                            Local corpus version record
@@ -207,6 +273,8 @@ data/
   processed/docs.jsonl                          Generated documents
   processed/chunks_fixed.jsonl                  Generated chunks
   processed/chunks_fixed.manifest.json          Generation provenance
+  processed/chunks_heading.jsonl                Generated heading chunks
+  processed/chunks_heading.manifest.json        Heading generation provenance
 README.md                   Setup, usage and limitations
 NOTES.md                    Decisions, failures and daily progress
 ```
@@ -220,5 +288,6 @@ Downloaded sources, generated data, the virtual environment and temporary files 
 - Source examples and inconsistencies are preserved; ingestion does not validate or repair them.
 - Cleaning has preservation checks, but its effect on retrieval quality has not yet been measured.
 - Answers and evaluation will refer to the pinned corpus version.
+- Structural scanning handles the observed corpus patterns but is not a complete Markdown parser. Oversized code is represented as source fragments.
 
 See [NOTES.md](NOTES.md) for decisions, source observations and evaluation candidates.
