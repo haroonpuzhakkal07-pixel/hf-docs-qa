@@ -4,14 +4,17 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 5:
+Implemented through Day 6:
 
 - Reviewed and selected 740 documentation pages.
-- Implemented conservative Markdown ingestion.
-- Implemented fixed-size and heading-aware chunking with source-character offsets.
+- Implemented conservative ingestion and two source-preserving chunking configurations.
 - Generated and verified both chunk datasets and their provenance manifests.
+- Built and verified normalized dense indexes for both configurations.
+- Added a command-line search and inspected 15 shared queries per configuration.
+- All 86 tests passed.
 
-Retrieval, answer generation and evaluation are upcoming. There are no retrieval-quality or answer-quality results yet.
+Manual observations and failures are recorded in NOTES.md. Formal retrieval
+evaluation, answer generation and answer evaluation are upcoming.
 
 ## Corpus
 
@@ -242,15 +245,108 @@ These configurations differ in size policy, overlap and heading context. Their c
 
 The heading manifest records configuration, policies, corpus and model pins, Git state, package versions, input/output hashes, implementation hashes and aggregate statistics.
 
+## Dense indexing and search
+
+### Cache the pinned model
+
+Download the complete embedding model once. The tokenizer cache alone is
+insufficient.
+
+```powershell
+@'
+from sentence_transformers import SentenceTransformer
+from src.config import EMBEDDING_MODEL, EMBEDDING_REVISION
+
+SentenceTransformer(
+    EMBEDDING_MODEL,
+    revision=EMBEDDING_REVISION,
+    device="cpu",
+    trust_remote_code=False,
+)
+print("Pinned embedding model cached.")
+'@ | .\.venv\Scripts\python.exe -B -
+```
+
+Subsequent indexing and search load the model from the local cache only.
+
+### Build both indexes
+
+After generating the chunk datasets and manifests:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m src.index --chunker fixed --batch-size 64
+.\.venv\Scripts\python.exe -B -m src.index --chunker heading --batch-size 64
+```
+
+Each command creates `data/index/<chunker>/` containing:
+
+- `index.faiss`: exact inner-product search with `faiss.IndexFlatIP`.
+- `chunks.jsonl`: a byte-identical copy of the input chunk dataset.
+- `manifest.json`: model settings, corpus and Git state, package versions,
+  input provenance, implementation hashes and artifact hashes.
+
+FAISS row numbers correspond to zero-based chunk-record order. Complete saved
+`text` passages are embedded, including heading context and fragment formatting.
+The writer refuses any existing output directory, including an incomplete one;
+inspect existing outputs before deciding how to preserve or replace them.
+
+Encoding uses CPU float32 vectors with unit normalization. Batch size 64 is
+adjustable. All complete inputs are checked against the loaded encoder's
+sequence limit, including special tokens and any prompt. Overlong inputs raise
+an error instead of being truncated.
+
+The verified model limit is 512 tokens. Fixed passages contain 53–303 encoder
+tokens; heading passages contain 15–400. Both datasets fit without truncation.
+
+| Index | Rows | Dimensions |
+| --- | ---: | ---: |
+| Fixed | 5,703 | 384 |
+| Heading | 5,771 | 384 |
+
+Saved-file checks verified artifact hashes, exact mapping copies, finite
+normalized vectors and sampled row associations by re-encoding passages.
+
+### Search
+
+```powershell
+.\.venv\Scripts\python.exe -B -m src.retrieve --index heading --k 5 "How do I load a model in 8-bit using bitsandbytes?"
+```
+
+Use `--index fixed` for the baseline. Results display score, source path,
+heading path, chunk ID and a 150-character preview. The Python function
+`dense_search(query, index_name, k)` returns complete scored chunk records.
+
+Queries explicitly receive the prefix
+`"Represent this sentence for searching relevant passages: "` including its
+trailing space. Passages receive no instruction. This follows the
+[pinned model card](https://huggingface.co/BAAI/bge-small-en-v1.5/blob/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/README.md);
+the loaded model's configured query prompt is empty.
+
+Both query and passage vectors are normalized, so inner-product scores represent
+cosine similarity, not probabilities. The loader checks artifact hashes and
+embedding compatibility before search. Indexes and the model are cached within
+each process; restart the process after replacing saved artifacts.
+
+Fifteen shared exploratory queries were inspected for each configuration.
+Detailed observations are in NOTES.md. These are not formal evaluation results,
+and a retrieved page can still lack the required answering passage.
+
 ## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider
 ```
 
-Tests cover ingestion, source preservation, fixed token windows, heading hierarchy, indented and nested fences, oversized code and lines, overlap, small-chunk merging, token limits, metadata, provenance writing and overwrite protection. All 64 tests passed at the end of Day 5 implementation.
+Tests cover ingestion, source preservation, fixed and heading-aware chunking,
+fence handling, token limits, metadata, provenance, overwrite protection,
+FAISS serialization and row alignment, query-prefix handling, incompatible
+or changed index artifacts, and rejection of overlong inputs before inference.
+All 86 tests passed at the end of Day 6 implementation.
 
-Chunking tests require the cached pinned tokenizer. The corpus integration test also requires the downloaded source files.
+Chunking tests require the cached pinned tokenizer. Embedding length checks
+also require the cached complete model. The corpus integration test requires
+the downloaded source files. Index-writing and retrieval tests use tiny
+temporary indexes and known vectors.
 
 ## Repository layout
 
@@ -261,11 +357,16 @@ src/
   chunking.py               Fixed-size chunking and provenance
   chunking_heading.py       Heading-aware chunking and provenance
   markdown_structure.py     Source-preserving heading and fence scanning
+  embeddings.py             Pinned model and checked normalized encoding
+  index.py                  Dense index writing and provenance
+  retrieve.py               Verified index loading and search CLI
+
 tests/
   test_ingest.py                                Ingestion tests
   test_chunking.py                              Chunking and writer tests
   test_chunking_heading.py                      Heading chunking and writer tests
   test_markdown_structure.py                    Heading, fence and block-boundary tests
+  test_index.py                                 Embedding guards, index and retrieval tests
 data/
   selection_report.csv                          Tracked selection decisions and evidence
   CORPUS_VERSION.txt                            Local corpus version record
@@ -275,6 +376,8 @@ data/
   processed/chunks_fixed.manifest.json          Generation provenance
   processed/chunks_heading.jsonl                Generated heading chunks
   processed/chunks_heading.manifest.json        Heading generation provenance
+  index/fixed/                                  Fixed index, chunk mapping and manifest
+  index/heading/                                Heading index, chunk mapping and manifest
 README.md                   Setup, usage and limitations
 NOTES.md                    Decisions, failures and daily progress
 ```

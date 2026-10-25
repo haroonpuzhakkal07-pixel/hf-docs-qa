@@ -15,6 +15,10 @@
 - Deviate from Day 5's "never split inside a code fence" rule when necessary to enforce the token limit without truncation. Observed examples include a 2,137-token fenced block and a single 1,267-token line. Preserve oversized blocks as explicitly marked source fragments; balanced formatting does not imply executable code.
 - Treat the minimum chunk size and overlap as preferences. The hard token limit, complete source coverage and preservation of fitting code blocks take priority.
 - Validate fences using delimiter character, length and open/closed state rather than counting triple-backtick pairs. Include the indented and nested patterns observed in this corpus.
+- Use the pinned embedding model on CPU with float32 normalized vectors and batch_size=64. Add the recommended BGE instruction explicitly to queries only; the loaded model's query prompt is empty.
+- Check complete encoder inputs, including prompts and special tokens, and reject overlong inputs instead of truncating them.
+- Save each IndexFlatIP index with a byte-identical chunk mapping and provenance manifest in a separate protected directory. Index row order matches saved chunk-record order.
+- Keep Day 6 manual observations separate from the later formal evaluation.
 
 ## What failed
 
@@ -127,3 +131,46 @@ End each session with did / broke / next. Historical next steps describe the pla
 - did: Implemented heading-aware chunking, structural scanning, bounded code fragments, overlap, small-chunk merging and provenance writing. Independently verified the saved dataset across all 740 documents, compared actual boundaries with the fixed baseline and updated README. All 64 tests passed.
 - broke: Boundary insertion and whitespace-only separator chunks required corrections recorded above. Final corpus and saved-file audits reported no issues.
 - next: Follow Day 6: build embeddings and dense indexes for both chunkers using the pinned model, check its query-prefix guidance and inspect retrieval results.
+
+### Day 6
+
+- did: Implemented checked embeddings, dense index writing and a search CLI. Built and independently verified fixed and heading indexes with 5,703 and 5,771 normalized 384-dimensional vectors. All 11,474 passages fit the loaded encoder's 512-token limit without truncation. Reviewed 15 shared queries per configuration; all 86 tests passed.
+- broke: Manual inspection found three fixed expected-page misses, a heading passage-level miss despite a DETR page hit, and ranking distractions documented below. Model downloads completed despite unauthenticated-access and Windows symlink warnings.
+- next: Follow Day 7: review failure hypotheses and remaining limitations before beginning the formal evaluation set. Complete the Week 1 review and v0.1 tag.
+
+## Day 6 manual search observations
+
+Exploratory inspection using the same queries for fixed and heading indexes,
+k=5, normalized BAAI/bge-small-en-v1.5 embeddings and the recommended query-only
+instruction. Model revision and artifact provenance are recorded in each index
+manifest. These observations are separate from formal retrieval evaluation.
+
+| ID | Query | Expected page | Fixed first page rank | Heading first page rank | Observation |
+| --- | --- | --- | ---: | ---: | --- |
+| 01 | How do I load a model in 8-bit using bitsandbytes? | quantization/bitsandbytes.md | 4 | 2 | Both contain useful 8-bit loading evidence at rank 1 on alternative pages. Both also return 4-bit material. The heading expected-page hit mixes several topics, so page rank alone overstates passage relevance. |
+| 02 | How can I make physical GPU 2 appear as cuda:0 and physical GPU 0 as cuda:1? | accelerator_selection.md | Not in top 5 | 3 | Fixed misses the page and answering evidence; results concern GPU architecture, installation and tensor dumps. Heading rank 3 explicitly explains the requested remapping. Both rank architecture troubleshooting first. |
+| 03 | When batching inputs for GTE, can I use left padding without adjusting position IDs? | model_doc/gte.md | Not in top 5 | 3 | Fixed returns padding guidance for other models without GTE-specific evidence. Heading rank 3 explicitly requires right padding or appropriately prepared position_ids for left padding. |
+| 04 | How many speakers can Nemotron 3 Diarization handle, and how are its speaker outputs ordered? | model_doc/nemotron3_diarization.md | 1 | 1 | Both rank-1 passages contain both requested facts: up to eight speakers, ordered by first arrival in the audio. |
+| 05 | Can I combine add_generation_prompt and continue_final_message when formatting a chat? | chat_templating.md | 1 | 1 | Fixed rank 1 cuts off inside the warning; rank 3 contains it completely. Heading rank 1 contains the complete warning that combining the options raises an error. |
+| 06 | Why does a static KV cache help compilation, and what is the downside when sequence lengths vary widely? | kv_cache.md | 1 | 4 | Both answering passages explain fixed allocation, compilation and wasted attention computation for shorter sequences. Heading ranks exporter implementation passages, including code fragments, above the explanation. |
+| 07 | For Qwen3-30B-A3B, how many routed experts are available and how many are activated per token? | model_doc/qwen3_moe.md | Not in top 5 | 1 | Fixed retrieves other MoE models, ranking Qwen3.5-MoE first, without the requested model-specific evidence. Heading rank 1 contains 128 routed experts, 8 activated per token and the matching checkpoint example. |
+| 08 | Why can zero-shot classification require multiple forward passes for one input, and how does ChunkPipeline help with batch size? | pipeline_tutorial.md | 1 | 2 | Both retrieve useful chunk-batching explanations and independent batch_size tuning. Fixed rank 1 lacks the task-specific introduction; heading rank 1 on main_classes/pipelines.md preserves it. Retrieved evidence does not explain underlying label-by-label mechanics. |
+| 09 | Does Moonshine Streaming need mel-spectrogram preprocessing, and what enables incremental audio processing? | model_doc/moonshine_streaming.md | 1 | 1 | Both rank-1 passages state that raw waveforms need no mel-spectrogram preprocessing and describe sliding-window encoder attention plus a context adapter for incremental processing. |
+| 10 | How does gradient checkpointing save activation memory, and why can it slow training? | grad_checkpointing.md | 1 | 1 | Both rank-1 passages explain saving selected activations and recomputing discarded activations during the backward pass, trading memory savings for extra computation. |
+| 11 | How does byte-level BPE avoid unknown tokens without including every Unicode character in its base vocabulary? | tokenizer_summary.md | 1 | 1 | Both rank-1 passages explain the 256-byte base vocabulary and avoidance of unknown tokens. Heading isolates the explanation; fixed includes neighboring BPE and Unigram content. |
+| 12 | How does beam search differ from greedy decoding, and what num_beams setting enables it? | generation_strategies.md | 1 | 1 | Both rank-1 passages explain multiple candidate sequences, overall sequence probability and num_beams greater than 1. |
+| 13 | In DETR inference, which image-processor method converts model outputs to detected boxes, and how is the original image size supplied? | model_doc/detr.md | 1 | 1 | Fixed rank 1 contains post_process_object_detection and target_sizes=torch.tensor([image.size[::-1]]). Heading has a page hit but no answering evidence in its top five: a passage-level miss. |
+| 14 | How can I map an extractive QA answer's character positions to token positions without confusing question tokens with context tokens? | tasks/question_answering.md | 2 | 1 | Both retrieve offset-mapping and sequence_ids guidance. Source prose uses return_offset_mapping=True, while its code uses return_offsets_mapping=True; preserve this discrepancy. |
+| 15 | Can AWQ fused modules be combined with FlashAttention2, and should fuse_max_seq_len include generated tokens? | quantization/awq.md | 1 | 1 | Both rank-1 passages contain the FlashAttention2 incompatibility warning and specify context plus expected generation length for fuse_max_seq_len. |
+
+### Observed results and limitations
+
+- The expected page appeared in the top five for 12 of 15 fixed searches and 15 of 15 heading searches.
+- Fixed missed the expected page and answering evidence on queries 02, 03 and 07.
+- Heading query 13 retrieved the expected DETR page but no answering passage in its top five. Page hits can conceal passage-level misses.
+- Other observed issues include 4-bit material for an 8-bit question, GPU architecture troubleshooting for device remapping, and exporter implementation fragments above a cache tradeoff explanation.
+- Query 05 illustrates a boundary difference: fixed cuts the warning in its first result but retrieves it completely at rank 3; heading retrieves the complete warning at rank 1.
+- Query 08's retrieved passages explain chunk batching but not the underlying label-by-label mechanics of zero-shot classification.
+- Query 14 exposes a source inconsistency: singular return_offset_mapping in prose versus plural return_offsets_mapping in code. Source content was preserved.
+- These were source-checked exploratory questions, not a formal evaluation set. Do not generalize the counts or attribute differences solely to heading boundaries; the configurations also differ in size, overlap and context.
+- Record actual failures rather than manufacture misses to satisfy the plan's suggested failure quota.
