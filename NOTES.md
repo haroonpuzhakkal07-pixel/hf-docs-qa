@@ -19,6 +19,9 @@
 - Check complete encoder inputs, including prompts and special tokens, and reject overlong inputs instead of truncating them.
 - Save each IndexFlatIP index with a byte-identical chunk mapping and provenance manifest in a separate protected directory. Index row order matches saved chunk-record order.
 - Keep Day 6 manual observations separate from the later formal evaluation.
+- Assign evaluation splits by authoring order: every fourth question is test. Preserve sequential IDs and file order; previously inspected Day 6 queries remain development examples.
+- Validate test-question labels against source documents without running retrieval or generation on them during development.
+- Store gold source headings as full H1–H3 paths. Automated checks establish reference validity, while manual review establishes answer support.
 
 ## What failed
 
@@ -143,6 +146,12 @@ End each session with did / broke / next. Historical next steps describe the pla
 - did: Reviewed the observed retrieval failures, recorded possible causes and Week 2 checks, reviewed Week 1 documentation, and preserved both dense configurations as baselines.
 - broke: No new implementation failures observed. Causes of the Day 6 retrieval failures remain hypotheses.
 - next: Complete the v0.1 milestone, then begin Day 8's lookup questions and source checker. Keep previously inspected questions out of the untouched held-out test set.
+
+### Day 8
+
+- did: Created 14 source-checked, answerable lookup questions with short gold answers and source references: 11 dev and 3 test. Added a checker for the corpus pin, schema, authoring order, splits, duplicates, selected paths and headings. All 95 tests passed.
+- broke: No implementation failures observed. Automated reference checks cannot establish semantic answer support, so every gold answer was also reviewed against its cited source section.
+- next: Follow Day 9: add 10 lookup and 8 multi-step questions, reaching 32 total. Continue assigning every fourth question to test without inspecting held-out retrieval or generation performance.
 
 ## Day 6 manual search observations
 

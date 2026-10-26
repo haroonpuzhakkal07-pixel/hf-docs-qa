@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Week 1 implementation and review:
+Implemented through Day 8:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -12,7 +12,8 @@ Week 1 implementation and review:
 - Built and verified normalized dense indexes for both configurations.
 - Added a command-line search and inspected 15 shared queries per configuration.
 - Reviewed retrieval failures and recorded hypotheses for Week 2 experiments.
-- All 86 tests passed.
+- Created 14 source-checked lookup questions and an evaluation-data checker.
+- All 95 tests passed.
 
 Manual observations and failures are recorded in NOTES.md. Formal retrieval
 evaluation, answer generation and answer evaluation are upcoming.
@@ -332,6 +333,36 @@ Fifteen shared exploratory queries were inspected for each configuration.
 Detailed observations are in NOTES.md. These are not formal evaluation results,
 and a retrieved page can still lack the required answering passage.
 
+## Evaluation questions
+
+`eval/questions.jsonl` currently contains 14 answerable lookup questions:
+11 dev and 3 test. Each record includes a stable ID, question, type,
+answerability, gold answer, source references and split.
+
+Source paths are relative to `docs/source/en`. Source headings use the full
+H1–H3 hierarchy, matching the structural scanner. For content under deeper
+headings, reference the enclosing H1–H3 section.
+
+Validate the dataset from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m eval.check_questions
+```
+
+The checker verifies the downloaded corpus commit, record structure, sequential
+IDs, duplicate questions, type/answerability consistency, split assignments,
+selected source-file existence and heading references outside code and comments.
+It does not verify whether a source supports a gold answer; that requires manual
+source review.
+
+Every fourth question in authoring order is assigned to test. Currently these
+are q004, q008 and q012. Preserve IDs and order when extending the dataset.
+Source-label validation is allowed for test questions; retrieval and generation
+performance must not be inspected during development.
+
+The Day 6 manual queries remain development examples. No formal retrieval or
+answer-quality scores have been produced.
+
 ## Tests
 
 ```powershell
@@ -342,7 +373,9 @@ Tests cover ingestion, source preservation, fixed and heading-aware chunking,
 fence handling, token limits, metadata, provenance, overwrite protection,
 FAISS serialization and row alignment, query-prefix handling, incompatible
 or changed index artifacts, and rejection of overlong inputs before inference.
-All 86 tests passed at the end of Day 6 implementation.
+Evaluation-data tests cover source selection and existence, headings hidden in
+code or comments, split assignments, duplicate questions, unanswerable records
+and malformed JSON. All 95 tests passed at the end of Day 8 implementation.
 
 Chunking tests require the cached pinned tokenizer. Embedding length checks
 also require the cached complete model. The corpus integration test requires
@@ -353,14 +386,14 @@ temporary indexes and known vectors.
 
 ```text
 src/
-  config.py                 Corpus pin and selected paths
-  ingest.py                 Loading, cleaning and JSONL writing
-  chunking.py               Fixed-size chunking and provenance
-  chunking_heading.py       Heading-aware chunking and provenance
-  markdown_structure.py     Source-preserving heading and fence scanning
-  embeddings.py             Pinned model and checked normalized encoding
-  index.py                  Dense index writing and provenance
-  retrieve.py               Verified index loading and search CLI
+  config.py                                     Corpus pin and selected paths
+  ingest.py                                     Loading, cleaning and JSONL writing
+  chunking.py                                   Fixed-size chunking and provenance
+  chunking_heading.py                           Heading-aware chunking and provenance
+  markdown_structure.py                         Source-preserving heading and fence scanning
+  embeddings.py                                 Pinned model and checked normalized encoding
+  index.py                                      Dense index writing and provenance
+  retrieve.py                                   Verified index loading and search CLI
 
 tests/
   test_ingest.py                                Ingestion tests
@@ -368,6 +401,12 @@ tests/
   test_chunking_heading.py                      Heading chunking and writer tests
   test_markdown_structure.py                    Heading, fence and block-boundary tests
   test_index.py                                 Embedding guards, index and retrieval tests
+  test_questions.py                             Evaluation-data validation tests
+
+eval/
+  questions.jsonl                               Source-checked evaluation questions and labels
+  check_questions.py                            Dataset and source-reference validation
+
 data/
   selection_report.csv                          Tracked selection decisions and evidence
   CORPUS_VERSION.txt                            Local corpus version record
