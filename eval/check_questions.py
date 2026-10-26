@@ -127,6 +127,11 @@ def check_questions(
                 heading in heading_cache[relative_path],
                 f"heading not found in {relative_path}: {heading!r}",
             )
+        if kind == "multi_step":
+            require(
+                len(seen_sources) >= 2,
+                "multi_step questions need at least two distinct source references",
+            )
 
         records.append(record)
 

@@ -22,6 +22,7 @@
 - Assign evaluation splits by authoring order: every fourth question is test. Preserve sequential IDs and file order; previously inspected Day 6 queries remain development examples.
 - Validate test-question labels against source documents without running retrieval or generation on them during development.
 - Store gold source headings as full H1–H3 paths. Automated checks establish reference validity, while manual review establishes answer support.
+- Multi-step questions must require evidence from at least two sections or pages. Enforce distinct source references automatically and review the need for combined evidence manually.
 
 ## What failed
 
@@ -152,6 +153,12 @@ End each session with did / broke / next. Historical next steps describe the pla
 - did: Created 14 source-checked, answerable lookup questions with short gold answers and source references: 11 dev and 3 test. Added a checker for the corpus pin, schema, authoring order, splits, duplicates, selected paths and headings. All 95 tests passed.
 - broke: No implementation failures observed. Automated reference checks cannot establish semantic answer support, so every gold answer was also reviewed against its cited source section.
 - next: Follow Day 9: add 10 lookup and 8 multi-step questions, reaching 32 total. Continue assigning every fourth question to test without inspecting held-out retrieval or generation performance.
+
+### Day 9
+
+- did: Added 10 lookup and 8 multi-step questions, reaching 32 answerable questions: 24 lookup and 8 multi-step, split into 24 dev and 8 test. Reviewed source support and required evidence combinations. Added a minimum-source rule and two tests for multi-step records; all 97 tests passed.
+- broke: No implementation failures observed. Distinct references do not establish genuine multi-step reasoning by themselves, so manual review remains necessary.
+- next: Follow Day 10: add 4 multi-step and 10 new_or_changed questions, reaching 46 total, then review 10 randomly selected questions for ambiguity. Preserve the held-out split.
 
 ## Day 6 manual search observations
 

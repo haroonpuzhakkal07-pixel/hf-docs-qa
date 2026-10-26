@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 8:
+Implemented through Day 9:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -12,8 +12,8 @@ Implemented through Day 8:
 - Built and verified normalized dense indexes for both configurations.
 - Added a command-line search and inspected 15 shared queries per configuration.
 - Reviewed retrieval failures and recorded hypotheses for Week 2 experiments.
-- Created 14 source-checked lookup questions and an evaluation-data checker.
-- All 95 tests passed.
+- Created 32 source-checked questions: 24 lookup and 8 multi-step, with an evaluation-data checker.
+- All 97 tests passed.
 
 Manual observations and failures are recorded in NOTES.md. Formal retrieval
 evaluation, answer generation and answer evaluation are upcoming.
@@ -335,9 +335,9 @@ and a retrieved page can still lack the required answering passage.
 
 ## Evaluation questions
 
-`eval/questions.jsonl` currently contains 14 answerable lookup questions:
-11 dev and 3 test. Each record includes a stable ID, question, type,
-answerability, gold answer, source references and split.
+`eval/questions.jsonl` currently contains 32 answerable questions:
+24 lookup and 8 multi-step, split into 24 dev and 8 test. Each record includes
+a stable ID, question, type, answerability, gold answer, source references and split.
 
 Source paths are relative to `docs/source/en`. Source headings use the full
 H1–H3 hierarchy, matching the structural scanner. For content under deeper
@@ -355,8 +355,13 @@ selected source-file existence and heading references outside code and comments.
 It does not verify whether a source supports a gold answer; that requires manual
 source review.
 
+Multi-step records must cite at least two distinct path-and-heading references.
+Manual review must also establish that answering the question requires combining
+the cited evidence; two references alone do not prove this.
+
 Every fourth question in authoring order is assigned to test. Currently these
-are q004, q008 and q012. Preserve IDs and order when extending the dataset.
+are q004, q008, q012, q016, q020, q024, q028 and q032.
+Preserve IDs and order when extending the dataset.
 Source-label validation is allowed for test questions; retrieval and generation
 performance must not be inspected during development.
 
@@ -374,8 +379,9 @@ fence handling, token limits, metadata, provenance, overwrite protection,
 FAISS serialization and row alignment, query-prefix handling, incompatible
 or changed index artifacts, and rejection of overlong inputs before inference.
 Evaluation-data tests cover source selection and existence, headings hidden in
-code or comments, split assignments, duplicate questions, unanswerable records
-and malformed JSON. All 95 tests passed at the end of Day 8 implementation.
+code or comments, split assignments, duplicate questions, unanswerable records,
+malformed JSON and minimum source counts for multi-step records.
+All 97 tests passed at the end of Day 9 implementation.
 
 Chunking tests require the cached pinned tokenizer. Embedding length checks
 also require the cached complete model. The corpus integration test requires

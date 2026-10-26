@@ -131,3 +131,23 @@ def test_reports_invalid_json_with_line_number(question_case):
             docs_root=path.parent / "docs",
             included_paths={"example.md"},
         )
+
+
+def test_rejects_multi_step_with_only_one_source(question_case):
+    _, validate = question_case
+    record = question(1)
+    record["type"] = "multi_step"
+
+    with pytest.raises(ValueError, match="at least two distinct source references"):
+        validate([record])
+
+
+def test_accepts_multi_step_with_two_valid_source_sections(question_case):
+    _, validate = question_case
+    record = question(1)
+    record["type"] = "multi_step"
+    record["gold_sources"].append(
+        {"path": "example.md", "heading": "Example"}
+    )
+
+    assert validate([record]) == [record]
