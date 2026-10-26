@@ -4,13 +4,14 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 6:
+Week 1 implementation and review:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
 - Generated and verified both chunk datasets and their provenance manifests.
 - Built and verified normalized dense indexes for both configurations.
 - Added a command-line search and inspected 15 shared queries per configuration.
+- Reviewed retrieval failures and recorded hypotheses for Week 2 experiments.
 - All 86 tests passed.
 
 Manual observations and failures are recorded in NOTES.md. Formal retrieval
@@ -392,5 +393,6 @@ Downloaded sources, generated data, the virtual environment and temporary files 
 - Cleaning has preservation checks, but its effect on retrieval quality has not yet been measured.
 - Answers and evaluation will refer to the pinned corpus version.
 - Structural scanning handles the observed corpus patterns but is not a complete Markdown parser. Oversized code is represented as source fragments.
+- Dense search can confuse related models or retrieve the right page without the required answering passage. Manual observations do not establish general retrieval quality.
 
 See [NOTES.md](NOTES.md) for decisions, source observations and evaluation candidates.

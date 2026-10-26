@@ -138,6 +138,12 @@ End each session with did / broke / next. Historical next steps describe the pla
 - broke: Manual inspection found three fixed expected-page misses, a heading passage-level miss despite a DETR page hit, and ranking distractions documented below. Model downloads completed despite unauthenticated-access and Windows symlink warnings.
 - next: Follow Day 7: review failure hypotheses and remaining limitations before beginning the formal evaluation set. Complete the Week 1 review and v0.1 tag.
 
+### Day 7
+
+- did: Reviewed the observed retrieval failures, recorded possible causes and Week 2 checks, reviewed Week 1 documentation, and preserved both dense configurations as baselines.
+- broke: No new implementation failures observed. Causes of the Day 6 retrieval failures remain hypotheses.
+- next: Complete the v0.1 milestone, then begin Day 8's lookup questions and source checker. Keep previously inspected questions out of the untouched held-out test set.
+
 ## Day 6 manual search observations
 
 Exploratory inspection using the same queries for fixed and heading indexes,
@@ -174,3 +180,25 @@ manifest. These observations are separate from formal retrieval evaluation.
 - Query 14 exposes a source inconsistency: singular return_offset_mapping in prose versus plural return_offsets_mapping in code. Source content was preserved.
 - These were source-checked exploratory questions, not a formal evaluation set. Do not generalize the counts or attribute differences solely to heading boundaries; the configurations also differ in size, overlap and context.
 - Record actual failures rather than manufacture misses to satisfy the plan's suggested failure quota.
+
+## Day 7 failure review
+
+The following are hypotheses from Day 6 observations, not established causes.
+Keep both chunking configurations and indexes unchanged for the baseline.
+Test retrieval changes on development questions during Week 2.
+
+| Case | Observed failure | Hypothesis | Possible Week 2 check |
+| --- | --- | --- | --- |
+| Query 02, fixed | GPU-remapping evidence is absent from the top five; architecture troubleshooting and tensor dumps rank higher. | General CUDA/device vocabulary outweighs the specific relationship between physical GPU order and logical device names. | Inspect the relevant passage's rank and compare dense, BM25 and hybrid results on development questions involving device identifiers. |
+| Query 03, fixed | Other models' padding guidance replaces GTE-specific evidence. | Shared padding vocabulary dominates model identity; heading context may help retain the model name near the requirement. | Compare identifier-sensitive retrieval across configurations and inspect whether each answering passage includes its model identity. The current configurations cannot isolate the effect of headings alone. |
+| Query 07, fixed | Qwen3.5-MoE and other MoE variants replace Qwen3-30B-A3B. | Similar model names and expert-routing terminology cause variant confusion; exact checkpoint matching may help. | Compare dense, BM25 and hybrid retrieval on development questions that distinguish closely named models. Verify every retrieved fact against the requested variant. |
+| Query 13, heading | All five results are DETR page hits, but none supplies the requested postprocessing call and size argument. | Broad architecture passages outrank the specific inference example. Page-level scoring conceals this evidence miss. | Locate the answering chunk's rank and inspect whether later retrieval methods promote it. Retain passage inspection alongside the planned page-level metrics. |
+
+### Additional observations
+
+- Query 05 shows a warning split across fixed chunks, although the complete warning is retrieved at rank 3. This is a boundary weakness, not a top-five evidence failure.
+- Query 06 ranks exporter code fragments above the explanatory cache passage in heading search. Shared heading context may contribute, but that has not been isolated.
+- Query 08 asks for more explanation than the cited source explicitly provides. Review question answerability and wording before making a gold label.
+- Query 14 contains inconsistent parameter spelling in the source. Preserve it and use the verified code spelling when preparing an answer.
+- Do not tune chunking, remove code or strip markup based on this small exploratory sample.
+- Day 6 questions have already been inspected and discussed. Treat them as development examples; do not reuse them as untouched held-out test questions.
