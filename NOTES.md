@@ -160,6 +160,12 @@ End each session with did / broke / next. Historical next steps describe the pla
 - broke: No implementation failures observed. Distinct references do not establish genuine multi-step reasoning by themselves, so manual review remains necessary.
 - next: Follow Day 10: add 4 multi-step and 10 new_or_changed questions, reaching 46 total, then review 10 randomly selected questions for ambiguity. Preserve the held-out split.
 
+### Day 10
+
+- did: Added 4 multi-step and 10 new_or_changed questions, reaching 46 answerable questions: 24 lookup, 12 multi-step and 10 new_or_changed, split into 35 dev and 11 test. Verified source references and reviewed a reproducible random sample of 10 questions for ambiguity; retained all ten.
+- broke: No validation failures observed. Recent contribution metadata does not prove that a feature is newly introduced or unknown to a closed-book model.
+- next: Follow Day 11: implement retrieval evaluation with explicit split filtering and result provenance. Compare fixed and heading retrieval on answerable dev questions while preserving the held-out test set.
+
 ## Day 6 manual search observations
 
 Exploratory inspection using the same queries for fixed and heading indexes,
@@ -218,3 +224,14 @@ Test retrieval changes on development questions during Week 2.
 - Query 14 contains inconsistent parameter spelling in the source. Preserve it and use the verified code spelling when preparing an answer.
 - Do not tune chunking, remove code or strip markup based on this small exploratory sample.
 - Day 6 questions have already been inspected and discussed. Treat them as development examples; do not reuse them as untouched held-out test questions.
+
+## Day 10 question review
+
+- Dataset: 46 questions before review.
+- Selection: random.Random(10).sample(records, 10), sorted by ID for display.
+- Dataset SHA256: fc48a6aa9c1e282cda1b668b2031dacb07f07e8634eec42543648f20b5b1b3dd.
+- Reviewed IDs: q001, q003, q014, q018, q028, q030, q031, q032, q037, q046.
+- Checked standalone wording, model/checkpoint scope, answer support and required source combinations.
+- Outcome: retained all ten without changes. Reviewed source labels only, including the two sampled test records; no retrieval or generation performance was inspected.
+- q037–q046 use the five September 2026 contribution-metadata candidates listed above. The category concerns recent documented models, not independently verified feature introduction dates or demonstrated closed-book failures.
+- Day 10 changed question data and documentation only. The last full test run remains Day 9: 97 passed.

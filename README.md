@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 9:
+Implemented through Day 10:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -12,8 +12,8 @@ Implemented through Day 9:
 - Built and verified normalized dense indexes for both configurations.
 - Added a command-line search and inspected 15 shared queries per configuration.
 - Reviewed retrieval failures and recorded hypotheses for Week 2 experiments.
-- Created 32 source-checked questions: 24 lookup and 8 multi-step, with an evaluation-data checker.
-- All 97 tests passed.
+- Created 46 source-checked questions: 24 lookup, 12 multi-step and 10 new-or-changed, with an evaluation-data checker.
+- All 97 tests passed on Day 9; Day 10 question-data changes passed the source checker.
 
 Manual observations and failures are recorded in NOTES.md. Formal retrieval
 evaluation, answer generation and answer evaluation are upcoming.
@@ -335,9 +335,14 @@ and a retrieved page can still lack the required answering passage.
 
 ## Evaluation questions
 
-`eval/questions.jsonl` currently contains 32 answerable questions:
-24 lookup and 8 multi-step, split into 24 dev and 8 test. Each record includes
-a stable ID, question, type, answerability, gold answer, source references and split.
+`eval/questions.jsonl` currently contains 46 answerable questions:
+24 lookup, 12 multi-step and 10 new_or_changed, split into 35 dev and 11 test.
+Each record includes a stable ID, question, type, answerability, gold answer,
+source references and split.
+
+The new_or_changed category covers recently contributed model pages identified
+during corpus review. It does not establish when each feature was introduced or
+whether a closed-book model can answer the question.
 
 Source paths are relative to `docs/source/en`. Source headings use the full
 H1–H3 hierarchy, matching the structural scanner. For content under deeper
@@ -360,7 +365,7 @@ Manual review must also establish that answering the question requires combining
 the cited evidence; two references alone do not prove this.
 
 Every fourth question in authoring order is assigned to test. Currently these
-are q004, q008, q012, q016, q020, q024, q028 and q032.
+are q004, q008, q012, q016, q020, q024, q028, q032, q036, q040 and q044.
 Preserve IDs and order when extending the dataset.
 Source-label validation is allowed for test questions; retrieval and generation
 performance must not be inspected during development.
