@@ -166,6 +166,12 @@ End each session with did / broke / next. Historical next steps describe the pla
 - broke: No validation failures observed. Recent contribution metadata does not prove that a feature is newly introduced or unknown to a closed-book model.
 - next: Follow Day 11: implement retrieval evaluation with explicit split filtering and result provenance. Compare fixed and heading retrieval on answerable dev questions while preserving the held-out test set.
 
+### Day 11
+
+- did: Implemented reusable page-level retrieval metrics, answerable-dev filtering, protected JSON result writing, provenance collection and a dense evaluation CLI. Evaluated both existing indexes on 35 dev questions and audited saved records, metrics and hashes. All 124 tests passed.
+- broke: No implementation or evaluation failures observed. Page-level hits do not establish answering evidence or complete multi-source coverage.
+- next: Follow Day 12: implement BM25 for both chunkers, evaluate on answerable dev questions and compare identifier-sensitive retrieval with dense search. Preserve the held-out test split.
+
 ## Day 6 manual search observations
 
 Exploratory inspection using the same queries for fixed and heading indexes,
@@ -235,3 +241,22 @@ Test retrieval changes on development questions during Week 2.
 - Outcome: retained all ten without changes. Reviewed source labels only, including the two sampled test records; no retrieval or generation performance was inspected.
 - q037–q046 use the five September 2026 contribution-metadata candidates listed above. The category concerns recent documented models, not independently verified feature introduction dates or demonstrated closed-book failures.
 - Day 10 changed question data and documentation only. The last full test run remains Day 9: 97 passed.
+
+## Day 11 dense retrieval baselines
+
+Evaluated all 35 answerable dev questions from the unchanged Day 10 dataset.
+Dataset SHA256: fc48a6aa9c1e282cda1b668b2031dacb07f07e8634eec42543648f20b5b1b3dd.
+
+| Configuration | recall@1 | recall@3 | recall@5 | recall@10 | MRR@10 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Dense + fixed | 25/35 (71.43%) | 30/35 (85.71%) | 31/35 (88.57%) | 31/35 (88.57%) | 0.7867 |
+| Dense + heading | 25/35 (71.43%) | 32/35 (91.43%) | 33/35 (94.29%) | 34/35 (97.14%) | 0.8167 |
+
+- A hit matches any gold source page by path. Ranks refer to chunks, including repeated pages.
+- Recall@k divides questions with a hit by all 35 evaluated questions. MRR@10 averages reciprocal first-hit ranks through rank 10, assigning zero to misses.
+- Page hits do not establish complete answer evidence or retrieval of every source needed by a multi-step question.
+- Heading has a net advantage of two questions at k=5 and three at k=10. This small dev-set comparison does not isolate the effect of heading boundaries.
+- Saved runs: eval/results/retrieval/dense_fixed_dev.json and eval/results/retrieval/dense_heading_dev.json.
+- Both runs record project commit 9d6c5f0460cca7a2b052b4edbfdb67451dd3fcd9 with git_dirty=true because Day 11 implementation was uncommitted. Implementation hashes identify the code used.
+- Saved-result inspection confirmed eligible IDs, all 10 retrieved records per question, complete chunk-mapping matches, recalculated metrics and input hashes.
+- Existing indexes and source content were preserved. No held-out test retrieval or generation performance was inspected, and no retrieval or chunking tuning was performed.

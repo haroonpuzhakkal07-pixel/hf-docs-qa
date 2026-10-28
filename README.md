@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 10:
+Implemented through Day 11:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -13,10 +13,11 @@ Implemented through Day 10:
 - Added a command-line search and inspected 15 shared queries per configuration.
 - Reviewed retrieval failures and recorded hypotheses for Week 2 experiments.
 - Created 46 source-checked questions: 24 lookup, 12 multi-step and 10 new-or-changed, with an evaluation-data checker.
-- All 97 tests passed on Day 9; Day 10 question-data changes passed the source checker.
+- Added reusable dev-only retrieval evaluation and saved both dense baseline runs with provenance.
+- All 124 tests passed on Day 11.
 
-Manual observations and failures are recorded in NOTES.md. Formal retrieval
-evaluation, answer generation and answer evaluation are upcoming.
+Manual observations, failures and formal dense retrieval baselines are recorded
+in NOTES.md. Answer generation and answer evaluation are upcoming.
 
 ## Corpus
 
@@ -370,8 +371,53 @@ Preserve IDs and order when extending the dataset.
 Source-label validation is allowed for test questions; retrieval and generation
 performance must not be inspected during development.
 
-The Day 6 manual queries remain development examples. No formal retrieval or
-answer-quality scores have been produced.
+The Day 6 manual queries remain development examples. Formal retrieval results
+below use the Day 10 question dataset. Answer-quality evaluation is upcoming.
+
+## Retrieval evaluation
+
+Run from the repository root after building both dense indexes:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m src.evaluate --index fixed
+.\.venv\Scripts\python.exe -B -m src.evaluate --index heading
+```
+
+Each command refuses an existing result file. Saved baselines are under
+`eval/results/retrieval/` as `dense_fixed_dev.json` and
+`dense_heading_dev.json`.
+
+The reusable `eval_retrieval(retriever, questions, ks=(1, 3, 5, 10))` function
+accepts a callable with the interface `retriever(query, k=...)`. Questions must
+first pass dataset validation. The function filters to answerable dev questions
+before retrieval and requests the maximum k once per question.
+
+A hit means a retrieved chunk's source path matches any gold source page.
+Following the project plan, recall@k is the fraction of evaluated questions
+with at least one hit within the first k chunk ranks. Repeated pages retain
+their chunk ranks; results are not collapsed by page.
+
+MRR@10 averages the reciprocal rank of the first hit within 10 chunks, with
+zero for a miss. Both metric denominators include all 35 evaluated questions.
+A page hit does not establish complete answering evidence or coverage of
+every source required by a multi-step question.
+
+| Configuration | recall@1 | recall@3 | recall@5 | recall@10 | MRR@10 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Dense + fixed | 25/35 (71.43%) | 30/35 (85.71%) | 31/35 (88.57%) | 31/35 (88.57%) | 0.7867 |
+| Dense + heading | 25/35 (71.43%) | 32/35 (91.43%) | 33/35 (94.29%) | 34/35 (97.14%) | 0.8167 |
+
+These are small development-set comparisons. The configurations also differ
+in size policy, overlap and heading context, so differences cannot be
+attributed solely to heading boundaries. The 11 held-out test questions have
+not undergone retrieval or generation evaluation.
+
+Each saved run includes configuration, metric definitions, dataset SHA256,
+corpus commit and cleanliness, the full index manifest and actual artifact
+hashes, implementation hashes, package versions, Python/platform details,
+Git commit and dirty status, and complete per-question retrieved records.
+The runner rejects provenance changes during evaluation and preserves
+existing source files, indexes and result files.
 
 ## Tests
 
@@ -386,7 +432,10 @@ or changed index artifacts, and rejection of overlong inputs before inference.
 Evaluation-data tests cover source selection and existence, headings hidden in
 code or comments, split assignments, duplicate questions, unanswerable records,
 malformed JSON and minimum source counts for multi-step records.
-All 97 tests passed at the end of Day 9 implementation.
+Retrieval-evaluation tests cover cutoff boundaries, chunk ranks, dev-only
+filtering, denominators including misses, result serialization, overwrite
+protection and dense-runner integration with a fake retriever.
+All 124 tests passed on Day 11.
 
 Chunking tests require the cached pinned tokenizer. Embedding length checks
 also require the cached complete model. The corpus integration test requires
@@ -405,6 +454,7 @@ src/
   embeddings.py                                 Pinned model and checked normalized encoding
   index.py                                      Dense index writing and provenance
   retrieve.py                                   Verified index loading and search CLI
+  evaluate.py                                   Retrieval metrics, provenance and dense evaluation CLI
 
 tests/
   test_ingest.py                                Ingestion tests
@@ -413,10 +463,12 @@ tests/
   test_markdown_structure.py                    Heading, fence and block-boundary tests
   test_index.py                                 Embedding guards, index and retrieval tests
   test_questions.py                             Evaluation-data validation tests
+  test_evaluate.py                              Retrieval metric, writer and runner tests
 
 eval/
   questions.jsonl                               Source-checked evaluation questions and labels
   check_questions.py                            Dataset and source-reference validation
+  results/retrieval/                            Tracked dense dev baseline results
 
 data/
   selection_report.csv                          Tracked selection decisions and evidence
@@ -433,7 +485,9 @@ README.md                   Setup, usage and limitations
 NOTES.md                    Decisions, failures and daily progress
 ```
 
-Downloaded sources, generated data, the virtual environment and temporary files are ignored by Git. The selection report is tracked.
+Downloaded sources, processed corpus data, indexes, the virtual environment
+and temporary files are ignored by Git. The selection report and retrieval
+evaluation results are tracked.
 
 ## Limitations
 
