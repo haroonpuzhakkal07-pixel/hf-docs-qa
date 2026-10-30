@@ -172,6 +172,12 @@ End each session with did / broke / next. Historical next steps describe the pla
 - broke: No implementation or evaluation failures observed. Page-level hits do not establish answering evidence or complete multi-source coverage.
 - next: Follow Day 12: implement BM25 for both chunkers, evaluate on answerable dev questions and compare identifier-sensitive retrieval with dense search. Preserve the held-out test split.
 
+### Day 12
+
+- did: Implemented BM25 tokenization, protected index writing, verified loading and search. Built both indexes, evaluated all 35 answerable dev questions and audited saved results. Compared dense and BM25 rankings within each chunker and reviewed five examples in each direction. All 185 tests passed.
+- broke: During integration, provenance collection still selected dense artifact names for BM25 until the artifact selection was updated. A test mock also intercepted Windows platform detection; restricted the fake subprocess object to the evaluation module. Both issues were corrected before the real evaluation.
+- next: Follow Day 13: finish the evaluation question set, then implement hybrid reciprocal rank fusion and reranking. Use development questions for experiments and preserve held-out test performance.
+
 ## Day 6 manual search observations
 
 Exploratory inspection using the same queries for fixed and heading indexes,
@@ -260,3 +266,94 @@ Dataset SHA256: fc48a6aa9c1e282cda1b668b2031dacb07f07e8634eec42543648f20b5b1b3dd
 - Both runs record project commit 9d6c5f0460cca7a2b052b4edbfdb67451dd3fcd9 with git_dirty=true because Day 11 implementation was uncommitted. Implementation hashes identify the code used.
 - Saved-result inspection confirmed eligible IDs, all 10 retrieved records per question, complete chunk-mapping matches, recalculated metrics and input hashes.
 - Existing indexes and source content were preserved. No held-out test retrieval or generation performance was inspected, and no retrieval or chunking tuning was performed.
+
+## Day 12 BM25 evaluation and comparison
+
+BM25 uses rank-bm25 0.2.2, BM25Okapi with k1=1.5, b=0.75 and
+epsilon=0.25. Tokenization lowercases text and extracts [a-z0-9_]+,
+preserving underscores and repeated terms without stemming or stopword removal.
+
+Candidates must share at least one query token. Equal scores retain saved
+row order. Scores are not directly comparable with dense cosine similarities.
+
+### Verified index artifacts
+
+| Chunker | Rows | BM25 tokens | Tokenless chunks |
+| --- | ---: | ---: | ---: |
+| Fixed | 5,703 | 679,954 | 0 |
+| Heading | 5,771 | 629,719 | 0 |
+
+- Outputs: data/index/bm25/fixed/ and data/index/bm25/heading/.
+- Each contains tokens.pkl, a byte-identical chunks.jsonl mapping and a provenance manifest.
+- Both mappings match their processed datasets and dense counterparts.
+- Audits confirmed complete-text tokenization, row alignment and artifact, input-manifest and implementation hashes.
+- Existing source content and dense indexes were preserved.
+
+### Retrieval results
+
+All four configurations use the same 35 answerable dev questions.
+Dataset SHA256: fc48a6aa9c1e282cda1b668b2031dacb07f07e8634eec42543648f20b5b1b3dd.
+
+| Configuration | recall@1 | recall@3 | recall@5 | recall@10 | MRR@10 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Dense + fixed | 25/35 (71.43%) | 30/35 (85.71%) | 31/35 (88.57%) | 31/35 (88.57%) | 0.7867 |
+| Dense + heading | 25/35 (71.43%) | 32/35 (91.43%) | 33/35 (94.29%) | 34/35 (97.14%) | 0.8167 |
+| BM25 + fixed | 27/35 (77.14%) | 31/35 (88.57%) | 33/35 (94.29%) | 34/35 (97.14%) | 0.8312 |
+| BM25 + heading | 26/35 (74.29%) | 34/35 (97.14%) | 34/35 (97.14%) | 34/35 (97.14%) | 0.8333 |
+
+A hit matches any gold source page by path. Recall denominators include all
+35 questions. MRR@10 averages reciprocal first-hit chunk ranks through rank
+10, with zero for misses. Page hits do not establish complete answer
+evidence or coverage of every source required by multi-step questions.
+
+New results: eval/results/retrieval/bm25_fixed_dev.json and
+eval/results/retrieval/bm25_heading_dev.json. Both record project commit
+6dcc8848216d8949cd14d6ed87958f65c0442fde with git_dirty=true and implementation
+hashes identifying the code used. The original dense result files are unchanged.
+
+Saved-result audits confirmed eligible IDs, complete retrieved records,
+recalculated metrics, provenance hashes and matching dense/BM25 chunk mappings.
+The held-out test questions were not evaluated.
+
+### Per-question rank comparisons
+
+A win means a smaller first gold-page chunk rank within the top 10.
+A miss@10 is ranked below any hit. This can be a ranking improvement even
+when both methods already succeed at recall@5.
+
+| Chunker | BM25 wins | Dense wins | Ties |
+| --- | ---: | ---: | ---: |
+| Fixed | 6 | 6 | 23 |
+| Heading | 6 | 8 | 21 |
+
+The ten examples below compare methods using fixed chunks.
+
+| ID | Topic | Dense first hit | BM25 first hit | Rank winner |
+| --- | --- | ---: | ---: | --- |
+| q003 | Gradient accumulation option | 2 | 1 | BM25 |
+| q010 | Fully training the language-model head with LoRA | 2 | 1 | BM25 |
+| q015 | Cosine scheduler in TrainingArguments | miss@10 | 1 | BM25 |
+| q021 | Sharded-checkpoint parameter-to-file mapping | 5 | 1 | BM25 |
+| q037 | GTE token_type_ids and type_vocab_size | miss@10 | 1 | BM25 |
+| q001 | DistilBERT sentence-pair separator | 1 | 5 | Dense |
+| q002 | T5 translation task prefix | 2 | 3 | Dense |
+| q009 | Audio-classification sampling rate | 1 | 2 | Dense |
+| q014 | Callback versus forward-pass customization | 2 | 3 | Dense |
+| q033 | Masked versus causal language-modeling collator | 1 | 7 | Dense |
+
+BM25 promoted pages containing specific model/API identifiers and scheduler
+terms, especially q037 and q015. It also won q003 and q010 even though their
+questions omit the gold argument names. Dense promoted expected pages for
+wording about sentence segments, translation intent and callback customization.
+The identifier-rich q009 also favors dense, so identifier matching versus
+paraphrase is only a partial explanation. Treat these as hypotheses from a
+small development sample.
+
+Passage inspection exposed limits of the page-level metric: q021's BM25
+rank-1 chunk introduces sharded checkpoints without the requested weight_map
+entry, and q033's dense rank-1 chunk introduces causal language modeling
+without the requested collator settings. Neither page hit establishes
+complete answering evidence.
+
+No chunking, BM25 parameter or retrieval-policy tuning was performed after
+inspecting these results.

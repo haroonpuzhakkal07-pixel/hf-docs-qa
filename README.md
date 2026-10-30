@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 11:
+Implemented through Day 12:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -14,9 +14,10 @@ Implemented through Day 11:
 - Reviewed retrieval failures and recorded hypotheses for Week 2 experiments.
 - Created 46 source-checked questions: 24 lookup, 12 multi-step and 10 new-or-changed, with an evaluation-data checker.
 - Added reusable dev-only retrieval evaluation and saved both dense baseline runs with provenance.
-- All 124 tests passed on Day 11.
+- Built and verified BM25 indexes for both chunkers, evaluated both on answerable dev questions and compared their rankings with dense retrieval.
+- All 185 tests passed on Day 12.
 
-Manual observations, failures and formal dense retrieval baselines are recorded
+Manual observations, failures and formal retrieval baselines are recorded
 in NOTES.md. Answer generation and answer evaluation are upcoming.
 
 ## Corpus
@@ -374,18 +375,55 @@ performance must not be inspected during development.
 The Day 6 manual queries remain development examples. Formal retrieval results
 below use the Day 10 question dataset. Answer-quality evaluation is upcoming.
 
-## Retrieval evaluation
+## BM25 indexing and search
 
-Run from the repository root after building both dense indexes:
+BM25 uses `rank_bm25.BM25Okapi` with k1=1.5, b=0.75 and epsilon=0.25.
+Tokenization lowercases text and extracts `[a-z0-9_]+`, retaining underscores
+and repeated terms. There is no stemming or stopword removal.
+
+Build both indexes from the existing complete chunk datasets:
 
 ```powershell
-.\.venv\Scripts\python.exe -B -m src.evaluate --index fixed
-.\.venv\Scripts\python.exe -B -m src.evaluate --index heading
+.\.venv\Scripts\python.exe -B -m src.bm25 build --index fixed
+.\.venv\Scripts\python.exe -B -m src.bm25 build --index heading
+```
+
+Outputs are separate from the dense indexes, under
+`data/index/bm25/<chunker>/`: a byte-identical `chunks.jsonl`, token lists
+in `tokens.pkl`, and a provenance `manifest.json`. The writer refuses any
+existing output directory, including an incomplete one.
+
+Both saved mappings match their dense counterparts: 5,703 fixed rows and
+5,771 heading rows. Token lists preserve row order and do not modify source
+text. Hashes, configuration and token-to-text alignment are checked on load.
+Pickle artifacts are intended to be locally generated.
+
+Search a saved index:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m src.bm25 search --index heading --k 5 "How do I choose a cosine learning-rate scheduler?"
+```
+
+Search returns complete scored chunk records. Candidates must share at least
+one query token; a query with no matches returns no results. Equal scores are
+ordered by saved row number. Loaded indexes are cached per process; restart
+after replacing artifacts. Compare retrieval methods using evaluation
+metrics rather than their raw score scales.
+
+## Retrieval evaluation
+
+Run from the repository root after building the corresponding indexes:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever dense --index fixed
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever dense --index heading
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever bm25 --index fixed
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever bm25 --index heading
 ```
 
 Each command refuses an existing result file. Saved baselines are under
-`eval/results/retrieval/` as `dense_fixed_dev.json` and
-`dense_heading_dev.json`.
+`eval/results/retrieval/`, named `<retriever>_<chunker>_dev.json`.
+Omitting `--retriever` selects dense retrieval.
 
 The reusable `eval_retrieval(retriever, questions, ks=(1, 3, 5, 10))` function
 accepts a callable with the interface `retriever(query, k=...)`. Questions must
@@ -406,8 +444,11 @@ every source required by a multi-step question.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Dense + fixed | 25/35 (71.43%) | 30/35 (85.71%) | 31/35 (88.57%) | 31/35 (88.57%) | 0.7867 |
 | Dense + heading | 25/35 (71.43%) | 32/35 (91.43%) | 33/35 (94.29%) | 34/35 (97.14%) | 0.8167 |
+| BM25 + fixed | 27/35 (77.14%) | 31/35 (88.57%) | 33/35 (94.29%) | 34/35 (97.14%) | 0.8312 |
+| BM25 + heading | 26/35 (74.29%) | 34/35 (97.14%) | 34/35 (97.14%) | 34/35 (97.14%) | 0.8333 |
 
-These are small development-set comparisons. The configurations also differ
+These are small development-set comparisons. Dense and BM25 use identical
+chunk mappings within each chunker. Comparisons between chunkers also differ
 in size policy, overlap and heading context, so differences cannot be
 attributed solely to heading boundaries. The 11 held-out test questions have
 not undergone retrieval or generation evaluation.
@@ -434,8 +475,11 @@ code or comments, split assignments, duplicate questions, unanswerable records,
 malformed JSON and minimum source counts for multi-step records.
 Retrieval-evaluation tests cover cutoff boundaries, chunk ranks, dev-only
 filtering, denominators including misses, result serialization, overwrite
-protection and dense-runner integration with a fake retriever.
-All 124 tests passed on Day 11.
+protection, retriever-specific provenance and dense/BM25 runner integration
+with fake retrievers. BM25 tests cover tokenization, source preservation,
+serialization, row alignment, lexical matching, tie-breaking and rejection
+of changed artifacts or incompatible settings.
+All 185 tests passed on Day 12.
 
 Chunking tests require the cached pinned tokenizer. Embedding length checks
 also require the cached complete model. The corpus integration test requires
@@ -454,7 +498,8 @@ src/
   embeddings.py                                 Pinned model and checked normalized encoding
   index.py                                      Dense index writing and provenance
   retrieve.py                                   Verified index loading and search CLI
-  evaluate.py                                   Retrieval metrics, provenance and dense evaluation CLI
+  evaluate.py                                   Retrieval metrics, provenance and evaluation CLI
+  bm25.py                                       BM25 indexing, verified loading and search CLI
 
 tests/
   test_ingest.py                                Ingestion tests
@@ -464,11 +509,12 @@ tests/
   test_index.py                                 Embedding guards, index and retrieval tests
   test_questions.py                             Evaluation-data validation tests
   test_evaluate.py                              Retrieval metric, writer and runner tests
+  test_bm25.py                                  BM25 tokenization, indexing and retrieval tests
 
 eval/
   questions.jsonl                               Source-checked evaluation questions and labels
   check_questions.py                            Dataset and source-reference validation
-  results/retrieval/                            Tracked dense dev baseline results
+  results/retrieval/                            Tracked dense and BM25 dev baseline results
 
 data/
   selection_report.csv                          Tracked selection decisions and evidence
@@ -481,6 +527,8 @@ data/
   processed/chunks_heading.manifest.json        Heading generation provenance
   index/fixed/                                  Fixed index, chunk mapping and manifest
   index/heading/                                Heading index, chunk mapping and manifest
+  index/bm25/fixed/                             Fixed BM25 tokens, chunk mapping and manifest
+  index/bm25/heading/                           Heading BM25 tokens, chunk mapping and manifest
 README.md                   Setup, usage and limitations
 NOTES.md                    Decisions, failures and daily progress
 ```

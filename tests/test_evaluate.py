@@ -4,6 +4,8 @@ from unittest.mock import Mock
 
 from src import evaluate as evaluation
 from src.evaluate import eval_retrieval, save_retrieval_run, score_retrieval
+import hashlib
+from types import SimpleNamespace
 
 
 @pytest.mark.parametrize("rank", [1, 3, 5, 10, 11, None])
@@ -303,3 +305,180 @@ def test_dense_runner_refuses_existing_result_before_retrieval(
     loader.assert_not_called()
     assert calls == []
     assert output.read_bytes() == original
+
+
+@pytest.fixture
+def bm25_runner_case(dense_runner_case, monkeypatch):
+    from src import bm25
+
+    # Reuse the existing fake dataset: one eligible question, one test
+    # question and one unanswerable question.
+    index_name, dense_output, _, _ = dense_runner_case
+    output = dense_output.with_name(f"bm25_{index_name}_dev.json")
+    calls = []
+    loader = Mock()
+    provenance = {
+        "dataset": {"sha256": "fixture-hash"},
+        "index": {
+            "manifest": {
+                "tokenizer": {"pattern": bm25.TOKEN_PATTERN},
+                "bm25": {"class": "BM25Okapi", **bm25.BM25_SETTINGS},
+                "search": dict(bm25.SEARCH_SETTINGS),
+            },
+        },
+    }
+
+    def fake_search(query, selected_index, *, k):
+        calls.append((query, selected_index, k))
+        return [{
+            "chunk_id": "fixture:0",
+            "path": "gold.md",
+            "text": "Complete BM25 fixture passage.",
+            "score": 1.25,
+        }]
+
+    monkeypatch.setattr(
+        evaluation, "collect_provenance", Mock(return_value=provenance),
+    )
+    monkeypatch.setattr(bm25, "load_bm25_index", loader)
+    monkeypatch.setattr(bm25, "bm25_search", fake_search)
+    return index_name, output, calls, loader
+
+
+def test_bm25_runner_saves_only_answerable_dev_results(bm25_runner_case):
+    index_name, output, calls, loader = bm25_runner_case
+
+    report = evaluation.run_bm25_evaluation(index_name)
+    saved = json.loads(output.read_text(encoding="utf-8"))
+
+    loader.cache_clear.assert_called_once_with()
+    loader.assert_called_once_with(index_name)
+    assert calls == [("Question 1", index_name, 10)]
+    assert report["n_questions"] == 1
+    assert report["mrr@10"] == 1.0
+    assert [row["id"] for row in report["per_question"]] == ["q001"]
+    assert saved["evaluation"] == report
+    assert saved["config"]["retriever"] == "bm25"
+    assert saved["config"]["index"] == index_name
+    assert saved["config"]["split"] == "dev"
+    assert saved["config"]["retrieval_depth"] == 10
+    assert saved["config"]["search"] == (
+        saved["provenance"]["index"]["manifest"]["search"]
+    )
+    assert evaluation.collect_provenance.call_count == 2
+    evaluation.collect_provenance.assert_called_with(
+        index_name,
+        evaluation.REPO_ROOT / "eval" / "questions.jsonl",
+        retriever="bm25",
+    )
+
+
+def test_bm25_runner_rejects_provenance_changes(
+    bm25_runner_case, monkeypatch,
+):
+    index_name, output, _, _ = bm25_runner_case
+    before = evaluation.collect_provenance.return_value
+    after = {**before, "dataset": {"sha256": "changed"}}
+    monkeypatch.setattr(
+        evaluation, "collect_provenance",
+        Mock(side_effect=[before, after]),
+    )
+
+    with pytest.raises(ValueError, match="changed during the run"):
+        evaluation.run_bm25_evaluation(index_name)
+
+    assert not output.exists()
+    assert not output.parent.exists()
+
+
+def test_bm25_runner_preserves_existing_result(
+    bm25_runner_case, monkeypatch,
+):
+    index_name, output, calls, loader = bm25_runner_case
+    output.parent.mkdir(parents=True)
+    original = b"Preserved BM25 baseline.\n"
+    output.write_bytes(original)
+    monkeypatch.setattr(
+        evaluation, "collect_provenance",
+        Mock(side_effect=AssertionError("Must reject existing output first")),
+    )
+
+    with pytest.raises(FileExistsError, match="Result already exists"):
+        evaluation.run_bm25_evaluation(index_name)
+
+    loader.assert_not_called()
+    assert calls == []
+    assert output.read_bytes() == original
+
+
+@pytest.mark.parametrize("retriever", ["dense", "bm25"])
+@pytest.mark.parametrize("index_name", ["fixed", "heading"])
+def test_provenance_selects_the_correct_artifact_files(
+    tmp_path, monkeypatch, retriever, index_name,
+):
+    original_root = evaluation.REPO_ROOT
+    implementation_files = (
+        "src/evaluate.py", "src/retrieve.py", "src/bm25.py",
+        "src/embeddings.py", "src/config.py", "src/ingest.py",
+        "src/markdown_structure.py", "eval/check_questions.py",
+        "requirements.txt",
+    )
+    for name in implementation_files:
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((original_root / name).read_bytes())
+
+    questions_path = tmp_path / "eval" / "questions.jsonl"
+    questions_path.write_bytes(b"{}\n")
+    raw_dir = tmp_path / "corpus"
+
+    folder = tmp_path / "data" / "index"
+    artifact_names = ("index.faiss", "chunks.jsonl")
+    if retriever == "bm25":
+        folder = folder / "bm25"
+        artifact_names = ("chunks.jsonl", "tokens.pkl")
+    folder = folder / index_name
+    folder.mkdir(parents=True)
+
+    artifact_hashes = {}
+    for name in artifact_names:
+        data = name.encode("utf-8")
+        (folder / name).write_bytes(data)
+        artifact_hashes[name] = hashlib.sha256(data).hexdigest()
+
+    (folder / "manifest.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "retriever": retriever,
+            "chunker": index_name,
+            "corpus_commit": evaluation.CORPUS_COMMIT,
+            "artifacts": artifact_hashes,
+        }),
+        encoding="utf-8",
+    )
+
+    def fake_git(arguments, *, cwd, text):
+        if arguments[1:] == ["rev-parse", "HEAD"]:
+            return (
+                evaluation.CORPUS_COMMIT
+                if cwd == raw_dir else "fixture-project-commit"
+            )
+        return ""
+
+    monkeypatch.setattr(evaluation, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(evaluation, "RAW_DIR", raw_dir)
+    monkeypatch.setattr(
+        evaluation,
+        "subprocess",
+        SimpleNamespace(check_output=fake_git),
+    )
+
+    provenance = evaluation.collect_provenance(
+        index_name, questions_path, retriever=retriever,
+    )
+
+    assert provenance["index"]["artifact_sha256"] == artifact_hashes
+    assert provenance["index"]["path"] == folder.relative_to(tmp_path).as_posix()
+    assert provenance["dataset"]["sha256"] == hashlib.sha256(b"{}\n").hexdigest()
+    assert "src/bm25.py" in provenance["implementation_sha256"]
+    assert "rank-bm25" in provenance["environment"]["packages"]

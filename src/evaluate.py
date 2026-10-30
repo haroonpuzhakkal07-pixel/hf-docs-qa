@@ -161,10 +161,17 @@ def save_retrieval_run(
         stream.write(data)
 
 
-def collect_provenance(index_name: str, questions_path: Path) -> dict:
+def collect_provenance(
+    index_name: str,
+    questions_path: Path,
+    *,
+    retriever: str = "dense",
+) -> dict:
     """Snapshot evaluation inputs without modifying them."""
     if index_name not in ("fixed", "heading"):
         raise ValueError("index_name must be fixed or heading")
+    if retriever not in ("dense", "bm25"):
+        raise ValueError("retriever must be dense or bm25")
 
     def file_hash(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -184,9 +191,16 @@ def collect_provenance(index_name: str, questions_path: Path) -> dict:
         raise ValueError("Downloaded corpus has local changes")
 
     folder = REPO_ROOT / "data" / "index" / index_name
+    artifact_names = ("index.faiss", "chunks.jsonl")
+    if retriever == "bm25":
+        folder = REPO_ROOT / "data" / "index" / "bm25" / index_name
+        artifact_names = ("chunks.jsonl", "tokens.pkl")
     manifest_bytes = (folder / "manifest.json").read_bytes()
     manifest = json.loads(manifest_bytes)
-
+    if manifest["schema_version"] != 1:
+        raise ValueError("Unsupported index manifest schema")
+    if retriever == "bm25" and manifest["retriever"] != "bm25":
+        raise ValueError("Expected a BM25 index manifest")
     if manifest["chunker"] != index_name:
         raise ValueError("Index manifest has the wrong chunker")
     if manifest["corpus_commit"] != corpus_commit:
@@ -194,7 +208,7 @@ def collect_provenance(index_name: str, questions_path: Path) -> dict:
 
     artifact_hashes = {
         name: file_hash(folder / name)
-        for name in ("index.faiss", "chunks.jsonl")
+        for name in artifact_names
     }
     for name, digest in artifact_hashes.items():
         if digest != manifest["artifacts"][name]:
@@ -206,6 +220,7 @@ def collect_provenance(index_name: str, questions_path: Path) -> dict:
     implementation_files = (
         "src/evaluate.py",
         "src/retrieve.py",
+        "src/bm25.py",
         "src/embeddings.py",
         "src/config.py",
         "src/ingest.py",
@@ -247,6 +262,7 @@ def collect_provenance(index_name: str, questions_path: Path) -> dict:
                 for name in (
                     "sentence-transformers", "faiss-cpu", "torch",
                     "transformers", "tokenizers", "huggingface-hub", "numpy",
+                    "rank-bm25",
                 )
             },
         },
@@ -319,14 +335,80 @@ def run_dense_evaluation(index_name: str) -> dict:
     return report
 
 
+def run_bm25_evaluation(index_name: str) -> dict:
+    """Evaluate one saved BM25 index on answerable dev questions."""
+    if index_name not in ("fixed", "heading"):
+        raise ValueError("index_name must be fixed or heading")
+
+    output = (
+        REPO_ROOT / "eval" / "results" / "retrieval"
+        / f"bm25_{index_name}_dev.json"
+    )
+    if output.exists():
+        raise FileExistsError(f"Result already exists: {output}")
+
+    questions_path = REPO_ROOT / "eval" / "questions.jsonl"
+    provenance = collect_provenance(
+        index_name, questions_path, retriever="bm25",
+    )
+
+    from eval.check_questions import check_questions
+    from src.bm25 import bm25_search, load_bm25_index
+
+    questions = check_questions(questions_path)
+    load_bm25_index.cache_clear()
+    load_bm25_index(index_name)
+
+    manifest = provenance["index"]["manifest"]
+    config = {
+        "name": f"bm25_{index_name}_dev",
+        "retriever": "bm25",
+        "index": index_name,
+        "split": "dev",
+        "answerable_only": True,
+        "ks": list(DEFAULT_KS),
+        "retrieval_depth": max(DEFAULT_KS),
+        "tokenizer": manifest["tokenizer"],
+        "bm25": manifest["bm25"],
+        "search": manifest["search"],
+    }
+
+    print(
+        f"Evaluating BM25+{index_name} on answerable dev questions...",
+        flush=True,
+    )
+    report = eval_retrieval(
+        lambda query, *, k: bm25_search(query, index_name, k=k),
+        questions,
+    )
+
+    if collect_provenance(
+        index_name, questions_path, retriever="bm25",
+    ) != provenance:
+        raise ValueError("Evaluation inputs or Git state changed during the run")
+
+    save_retrieval_run(
+        output, report, config=config, provenance=provenance,
+    )
+    return report
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--retriever", choices=("dense", "bm25"), default="dense",
+    )
     parser.add_argument(
         "--index", choices=("fixed", "heading"), required=True,
     )
     args = parser.parse_args()
 
-    report = run_dense_evaluation(args.index)
+    runner = (
+        run_dense_evaluation
+        if args.retriever == "dense"
+        else run_bm25_evaluation
+    )
+    report = runner(args.index)
     count = report["n_questions"]
 
     print(f"Evaluated {count} answerable dev questions.")
@@ -337,7 +419,10 @@ def main() -> None:
             f"({report['recall'][key]:.4f})"
         )
     print(f"MRR@10: {report['mrr@10']:.4f}")
-    print(f"Saved eval/results/retrieval/dense_{args.index}_dev.json")
+    print(
+        f"Saved eval/results/retrieval/"
+        f"{args.retriever}_{args.index}_dev.json"
+    )
 
 
 if __name__ == "__main__":
