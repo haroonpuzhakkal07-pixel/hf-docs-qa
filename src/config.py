@@ -13,6 +13,11 @@ DOCS_ROOT = RAW_DIR / "docs" / "source" / "en"
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 EMBEDDING_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
 
+# Pinned cross-encoder for reranking complete query-passage pairs.
+RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
+RERANKER_REVISION = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
+RERANKER_MAX_LENGTH = 512
+
 # Window size and overlap count content tokens.
 FIXED_CHUNK_SIZE = 300
 FIXED_CHUNK_OVERLAP = 50

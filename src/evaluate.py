@@ -9,11 +9,25 @@ import hashlib
 import platform
 import subprocess
 from importlib.metadata import version
+from time import perf_counter
+import re
 
 from src.config import CORPUS_COMMIT, RAW_DIR, REPO_ROOT
 
 DEFAULT_KS = (1, 3, 5, 10)
 
+TIMING_POLICY = {
+    "unit": "milliseconds",
+    "clock": "time.perf_counter",
+    "scope": "retriever call and complete result materialization",
+    "models_and_indexes_loaded_before_timing": True,
+    "inference_warmup": False,
+    "includes": (
+        "query processing, search, fusion and reranking as applicable; "
+        "includes input-length checks"
+    ),
+    "excludes": "metric calculation, provenance and result serialization",
+}
 
 def score_retrieval(
     ranked_paths: list[str],
@@ -78,7 +92,10 @@ def eval_retrieval(retriever, questions, ks=DEFAULT_KS) -> dict:
         if not gold_paths:
             raise ValueError(f"{question['id']}: missing gold source pages")
 
+        started = perf_counter()
         retrieved = list(retriever(question["question"], k=cutoff))
+        elapsed_ms = (perf_counter() - started) * 1000.0
+
         if len(retrieved) > cutoff:
             raise ValueError("Retriever returned more results than requested")
 
@@ -93,6 +110,7 @@ def eval_retrieval(retriever, questions, ks=DEFAULT_KS) -> dict:
             "type": question["type"],
             "gold_paths": sorted(gold_paths),
             "retrieved": retrieved,
+            "elapsed_ms": elapsed_ms,
             **metrics,
         })
 
@@ -269,15 +287,102 @@ def collect_provenance(
     }
 
 
-def run_dense_evaluation(index_name: str) -> dict:
+def collect_combined_provenance(
+    index_name: str,
+    questions_path: Path,
+    *,
+    retriever: str,
+) -> dict:
+    """Snapshot both indexes and the hybrid/reranking implementation."""
+    if retriever not in ("hybrid", "reranked"):
+        raise ValueError("retriever must be hybrid or reranked")
+
+    dense = collect_provenance(
+        index_name, questions_path, retriever="dense",
+    )
+    bm25 = collect_provenance(
+        index_name, questions_path, retriever="bm25",
+    )
+    shared = {
+        key: value for key, value in dense.items() if key != "index"
+    }
+    bm25_shared = {
+        key: value for key, value in bm25.items() if key != "index"
+    }
+    if shared != bm25_shared:
+        raise ValueError("Shared provenance changed between index snapshots")
+    if (
+        dense["index"]["artifact_sha256"]["chunks.jsonl"]
+        != bm25["index"]["artifact_sha256"]["chunks.jsonl"]
+    ):
+        raise ValueError("Dense and BM25 chunk mappings differ")
+
+    implementation = dict(shared["implementation_sha256"])
+    for name in ("src/hybrid.py", "src/rerank.py"):
+        implementation[name] = hashlib.sha256(
+            (REPO_ROOT / name).read_bytes()
+        ).hexdigest()
+
+    result = {
+        **shared,
+        "implementation_sha256": implementation,
+        "indexes": {
+            "dense": dense["index"],
+            "bm25": bm25["index"],
+        },
+    }
+
+    if retriever == "reranked":
+        from src.config import (
+            RERANKER_MAX_LENGTH,
+            RERANKER_MODEL,
+            RERANKER_REVISION,
+        )
+
+        result["reranker"] = {
+            "model": RERANKER_MODEL,
+            "revision": RERANKER_REVISION,
+            "max_pair_tokens": RERANKER_MAX_LENGTH,
+            "device": "cpu",
+            "dtype": "float32",
+            "activation": "Identity",
+            "prompt": "",
+            "truncation": False,
+        }
+
+    return result
+
+
+def retrieval_output_path(
+    retriever: str,
+    index_name: str,
+    run_name: str | None = None,
+) -> Path:
+    """Resolve a result path without creating files or directories."""
+    if retriever not in ("dense", "bm25", "hybrid", "reranked"):
+        raise ValueError("Unknown retriever")
+    if index_name not in ("fixed", "heading"):
+        raise ValueError("index_name must be fixed or heading")
+
+    folder = REPO_ROOT / "eval" / "results" / "retrieval"
+    if run_name is not None:
+        if not isinstance(run_name, str) or re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_-]*", run_name
+        ) is None:
+            raise ValueError(
+                "run_name must start with a letter or digit and contain "
+                "only letters, digits, underscores or hyphens"
+            )
+        folder = folder / run_name
+    return folder / f"{retriever}_{index_name}_dev.json"
+
+
+def run_dense_evaluation(index_name: str, *, run_name: str | None = None,) -> dict:
     """Evaluate one existing dense index and save a protected dev run."""
     if index_name not in ("fixed", "heading"):
         raise ValueError("index_name must be fixed or heading")
 
-    output = (
-        REPO_ROOT / "eval" / "results" / "retrieval"
-        / f"dense_{index_name}_dev.json"
-    )
+    output = retrieval_output_path("dense", index_name, run_name)
     if output.exists():
         raise FileExistsError(f"Result already exists: {output}")
 
@@ -294,6 +399,7 @@ def run_dense_evaluation(index_name: str) -> dict:
     import torch
 
     from src.retrieve import dense_search, load_index
+    from src.embeddings import get_embedding_model
 
     random.seed(0)
     np.random.seed(0)
@@ -302,6 +408,8 @@ def run_dense_evaluation(index_name: str) -> dict:
     # Ensure this run loads the current verified artifacts.
     load_index.cache_clear()
     load_index(index_name)
+
+    get_embedding_model()
 
     config = {
         "name": f"dense_{index_name}_dev",
@@ -315,6 +423,8 @@ def run_dense_evaluation(index_name: str) -> dict:
         "seed": 0,
         "torch_threads": torch.get_num_threads(),
         "faiss_threads": faiss.omp_get_max_threads(),
+        "run_name": run_name,
+        "timing": dict(TIMING_POLICY),
     }
 
     print(
@@ -335,15 +445,12 @@ def run_dense_evaluation(index_name: str) -> dict:
     return report
 
 
-def run_bm25_evaluation(index_name: str) -> dict:
+def run_bm25_evaluation(index_name: str, *, run_name: str | None = None,) -> dict:
     """Evaluate one saved BM25 index on answerable dev questions."""
     if index_name not in ("fixed", "heading"):
         raise ValueError("index_name must be fixed or heading")
 
-    output = (
-        REPO_ROOT / "eval" / "results" / "retrieval"
-        / f"bm25_{index_name}_dev.json"
-    )
+    output = retrieval_output_path("bm25", index_name, run_name)
     if output.exists():
         raise FileExistsError(f"Result already exists: {output}")
 
@@ -371,6 +478,8 @@ def run_bm25_evaluation(index_name: str) -> dict:
         "tokenizer": manifest["tokenizer"],
         "bm25": manifest["bm25"],
         "search": manifest["search"],
+        "run_name": run_name,
+        "timing": dict(TIMING_POLICY),
     }
 
     print(
@@ -396,19 +505,33 @@ def run_bm25_evaluation(index_name: str) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--retriever", choices=("dense", "bm25"), default="dense",
+        "--retriever",
+        choices=("dense", "bm25", "hybrid", "reranked"),
+        default="dense",
     )
     parser.add_argument(
         "--index", choices=("fixed", "heading"), required=True,
     )
+    parser.add_argument(
+        "--run-name",
+        help="Save under a named subdirectory, preserving earlier runs.",
+    )
     args = parser.parse_args()
 
-    runner = (
-        run_dense_evaluation
-        if args.retriever == "dense"
-        else run_bm25_evaluation
-    )
-    report = runner(args.index)
+    if args.retriever == "dense":
+        report = run_dense_evaluation(
+            args.index, run_name=args.run_name,
+        )
+    elif args.retriever == "bm25":
+        report = run_bm25_evaluation(
+            args.index, run_name=args.run_name,
+        )
+    else:
+        report = run_combined_evaluation(
+            args.index,
+            retriever=args.retriever,
+            run_name=args.run_name,
+        )
     count = report["n_questions"]
 
     print(f"Evaluated {count} answerable dev questions.")
@@ -419,10 +542,111 @@ def main() -> None:
             f"({report['recall'][key]:.4f})"
         )
     print(f"MRR@10: {report['mrr@10']:.4f}")
-    print(
-        f"Saved eval/results/retrieval/"
-        f"{args.retriever}_{args.index}_dev.json"
+    output = retrieval_output_path(
+        args.retriever, args.index, args.run_name,
     )
+    print(f"Saved {output.relative_to(REPO_ROOT).as_posix()}")
+
+
+def run_combined_evaluation(
+    index_name: str,
+    *,
+    retriever: str,
+    run_name: str | None = None,
+) -> dict:
+    """Evaluate hybrid or reranked retrieval on answerable dev questions."""
+    if retriever not in ("hybrid", "reranked"):
+        raise ValueError("retriever must be hybrid or reranked")
+    output = retrieval_output_path(retriever, index_name, run_name)
+    if output.exists():
+        raise FileExistsError(f"Result already exists: {output}")
+
+    questions_path = REPO_ROOT / "eval" / "questions.jsonl"
+    provenance = collect_combined_provenance(
+        index_name, questions_path, retriever=retriever,
+    )
+
+    import faiss
+    import numpy as np
+    import torch
+
+    from eval.check_questions import check_questions
+    from src.bm25 import load_bm25_index
+    from src.embeddings import get_embedding_model
+    from src.hybrid import (
+        CANDIDATE_DEPTH,
+        RRF_CONSTANT,
+        check_hybrid_indexes,
+        hybrid_search,
+    )
+    from src.retrieve import load_index
+
+    questions = check_questions(questions_path)
+    random.seed(0)
+    np.random.seed(0)
+    torch.manual_seed(0)
+
+    load_index.cache_clear()
+    load_bm25_index.cache_clear()
+    check_hybrid_indexes.cache_clear()
+    check_hybrid_indexes(index_name)
+    get_embedding_model()
+
+    search = hybrid_search
+    config = {
+        "name": f"{retriever}_{index_name}_dev",
+        "run_name": run_name,
+        "retriever": retriever,
+        "index": index_name,
+        "split": "dev",
+        "answerable_only": True,
+        "ks": list(DEFAULT_KS),
+        "retrieval_depth": max(DEFAULT_KS),
+        "candidate_depth_per_method": CANDIDATE_DEPTH,
+        "rrf_constant": RRF_CONSTANT,
+        "rrf_tie_break": "ascending chunk_id",
+        "query_batch_size": 1,
+        "seed": 0,
+        "torch_threads": torch.get_num_threads(),
+        "faiss_threads": faiss.omp_get_max_threads(),
+        "timing": dict(TIMING_POLICY),
+    }
+
+    if retriever == "reranked":
+        from src.rerank import (
+            RERANK_CANDIDATES,
+            get_reranker,
+            reranked_search,
+        )
+
+        get_reranker()
+        search = reranked_search
+        config.update({
+            "rerank_candidates": RERANK_CANDIDATES,
+            "rerank_batch_size": 8,
+            "rerank_tie_break": "ascending original hybrid rank",
+            "rerank_input": "complete query-passage pairs; no truncation",
+        })
+
+    print(
+        f"Evaluating {retriever}+{index_name} "
+        "on answerable dev questions...",
+        flush=True,
+    )
+    report = eval_retrieval(
+        lambda query, *, k: search(query, index_name, k=k),
+        questions,
+    )
+
+    if collect_combined_provenance(
+        index_name, questions_path, retriever=retriever,
+    ) != provenance:
+        raise ValueError("Evaluation inputs or Git state changed during the run")
+
+    save_retrieval_run(
+        output, report, config=config, provenance=provenance,
+    )
+    return report
 
 
 if __name__ == "__main__":

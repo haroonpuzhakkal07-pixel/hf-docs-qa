@@ -357,3 +357,93 @@ complete answering evidence.
 
 No chunking, BM25 parameter or retrieval-policy tuning was performed after
 inspecting these results.
+
+
+## Day 13 hybrid retrieval and reranking
+
+### Dataset completion
+
+- Added two new_or_changed questions and twelve unanswerable questions.
+- Total: 60 questions — 24 lookup, 12 multi_step, 12 new_or_changed and 12 unanswerable.
+- Dev: 45 questions, comprising 36 answerable and 9 unanswerable.
+- Test: 15 questions, comprising 12 answerable and 3 unanswerable.
+- Dataset SHA256: cb13412b789ac5b8eebd1c70873f7e908c5a83ff80a2452f16f387353e4d3733.
+- Preserved the original 46 records and their split assignments.
+- Recorded corpus-wide absence checks in eval/unanswerable_checks.md.
+- Unanswerable means the requested answer is unsupported by the pinned documentation corpus, including reviewed excluded pages. It does not establish that the answer is unavailable externally.
+- All 60 records passed source-label validation. Held-out retrieval and generation performance remain untouched.
+
+### Retrieval configuration
+
+Hybrid retrieval combines up to 50 dense and 50 BM25 chunks using
+reciprocal rank fusion: sum 1 / (60 + rank), with one-based ranks.
+Chunks are identified by chunk_id; equal fused scores use ascending chunk_id.
+Both indexes must contain identical complete chunk mappings.
+
+Reranking scores the top 20 hybrid chunks with
+cross-encoder/ms-marco-MiniLM-L6-v2, pinned to revision
+233902d25c440f23af6f7d6e94d2946bac0bee0a.
+It uses CPU float32, Identity activation and complete query-passage pairs.
+Pairs exceeding 512 tokens, including special tokens, fail before inference;
+source text is never silently truncated.
+Equal reranker scores retain hybrid order.
+
+reranked_search returns five results by default and supports ten for
+retrieval evaluation. Its score is the raw cross-encoder score; hybrid_score,
+hybrid_rank and rrf_ranks preserve the preceding ranking information.
+
+### Matched dev results
+
+All six runs evaluate the same 36 answerable dev questions.
+The recall columns show questions with a gold-page hit / 36.
+MRR@10 includes zero for misses and divides by all 36 questions.
+Repeated source pages retain their original chunk ranks.
+
+| Configuration | recall@1 | recall@3 | recall@5 | recall@10 | MRR@10 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Dense + fixed | 26/36 | 31/36 | 32/36 | 32/36 | 0.7926 |
+| Dense + heading | 26/36 | 33/36 | 34/36 | 35/36 | 0.8218 |
+| BM25 + fixed | 28/36 | 32/36 | 34/36 | 35/36 | 0.8359 |
+| BM25 + heading | 27/36 | 35/36 | 35/36 | 35/36 | 0.8380 |
+| Hybrid + heading | 30/36 | 35/36 | 35/36 | 35/36 | 0.8981 |
+| Reranked hybrid + heading | 33/36 | 34/36 | 35/36 | 35/36 | 0.9329 |
+
+A hit matches any gold source page by path. It does not establish complete
+answer evidence or coverage of every source required by a multi-step question.
+
+These runs use the expanded dataset. Earlier Day 11–12 results used 35
+answerable dev questions and remain unchanged. Compare methods using the
+matched Day 13 runs rather than attributing denominator changes to retrieval.
+
+### Observed latency
+
+| Configuration | Mean ms/query | Median ms/query |
+| --- | ---: | ---: |
+| Dense + fixed | 30.64 | 28.21 |
+| Dense + heading | 24.96 | 25.25 |
+| BM25 + fixed | 43.74 | 42.29 |
+| BM25 + heading | 40.58 | 40.94 |
+| Hybrid + heading | 65.72 | 63.02 |
+| Reranked hybrid + heading | 1053.27 | 1037.70 |
+
+Each query is timed once with time.perf_counter, covering the retriever call
+and result materialization, including input-length checks.
+Models and indexes are loaded before timing; no inference warmup is performed.
+Metric calculation, provenance collection and result serialization are excluded.
+These are local CPU observations from one run, not repeated latency benchmarks.
+
+### Comparison and verification
+
+- Reranking improves rank-1 hits from 30 to 33 and MRR@10 from 0.8981 to 0.9329, while mean latency is roughly 16 times hybrid retrieval.
+- It does not improve every cutoff: recall@3 falls from 35/36 to 34/36.
+- q002 moves from first gold-page rank 2 to 4; q034 moves from 1 to 3.
+- q010, q014, q015 and q038 move to rank 1.
+- q026 remains a miss@10 for both hybrid and reranked retrieval.
+- These observations concern page-level ranking, not demonstrated answer quality.
+- Saved all six runs under eval/results/retrieval/day13/.
+- Runs record project commit 67d6b959cf024a7e545971d5855e8c1c964959c2 with dirty=true because Day 13 changes were uncommitted. Implementation hashes identify the source bytes used.
+- Hybrid and reranked provenance includes both index manifests and artifact hashes; reranked provenance also records the pinned cross-encoder settings.
+- Audits confirmed eligible IDs, ten complete mapped records per question, recalculated metrics, dataset hashes and implementation/artifact hashes.
+- All 270 tests passed. A real-model synthetic smoke check verified scoring and rejection of oversized pairs before inference.
+- Source content, existing indexes and historical result files were preserved.
+- No retrieval parameters were tuned after inspecting these results. No held-out performance was evaluated.

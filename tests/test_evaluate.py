@@ -209,6 +209,7 @@ def test_invalid_json_numbers_fail_before_creating_output(tmp_path):
 def dense_runner_case(tmp_path, monkeypatch, request):
     from eval import check_questions as question_validation
     from src import retrieve
+    from src import embeddings
 
     index_name = request.param
     output = (
@@ -243,6 +244,7 @@ def dense_runner_case(tmp_path, monkeypatch, request):
     )
     monkeypatch.setattr(retrieve, "load_index", loader)
     monkeypatch.setattr(retrieve, "dense_search", fake_search)
+    monkeypatch.setattr(embeddings, "get_embedding_model", Mock())
 
     return index_name, output, calls, loader
 
@@ -482,3 +484,343 @@ def test_provenance_selects_the_correct_artifact_files(
     assert provenance["dataset"]["sha256"] == hashlib.sha256(b"{}\n").hexdigest()
     assert "src/bm25.py" in provenance["implementation_sha256"]
     assert "rank-bm25" in provenance["environment"]["packages"]
+
+
+def test_timing_includes_result_materialization_and_only_eligible_questions(
+    monkeypatch,
+):
+    events = []
+    ticks = iter([10.0, 10.125, 20.0, 20.250])
+
+    def clock():
+        events.append("clock")
+        return next(ticks)
+
+    def retriever(query, *, k):
+        events.append(("call", query, k))
+
+        def results():
+            events.append(("materialize", query))
+            yield {"path": "gold.md"}
+
+        return results()
+
+    monkeypatch.setattr(evaluation, "perf_counter", clock)
+    report = eval_retrieval(
+        retriever,
+        [
+            evaluation_question(1),
+            evaluation_question(4, split="test"),
+            evaluation_question(5, answerable=False),
+            evaluation_question(2),
+        ],
+    )
+
+    assert events == [
+        "clock",
+        ("call", "Question 1", 10),
+        ("materialize", "Question 1"),
+        "clock",
+        "clock",
+        ("call", "Question 2", 10),
+        ("materialize", "Question 2"),
+        "clock",
+    ]
+    assert [row["elapsed_ms"] for row in report["per_question"]] == (
+        pytest.approx([125.0, 250.0])
+    )
+    assert report["n_questions"] == 2
+    assert report["mrr@10"] == 1.0
+
+
+@pytest.fixture
+def combined_provenance_case(monkeypatch):
+    shared = {
+        "dataset": {"sha256": "dataset-hash"},
+        "corpus": {"actual_commit": "corpus-pin"},
+        "git": {"commit": "project-commit", "dirty": True},
+        "implementation_sha256": {"src/evaluate.py": "code-hash"},
+        "environment": {"python": "fixture"},
+    }
+    dense = {
+        **shared,
+        "index": {
+            "path": "data/index/heading",
+            "artifact_sha256": {
+                "chunks.jsonl": "same-chunks",
+                "index.faiss": "dense-artifact",
+            },
+        },
+    }
+    bm25 = {
+        **shared,
+        "index": {
+            "path": "data/index/bm25/heading",
+            "artifact_sha256": {
+                "chunks.jsonl": "same-chunks",
+                "tokens.pkl": "bm25-artifact",
+            },
+        },
+    }
+    collector = Mock(side_effect=[dense, bm25])
+    monkeypatch.setattr(evaluation, "collect_provenance", collector)
+    return dense, bm25, collector
+
+
+@pytest.mark.parametrize("retriever", ["hybrid", "reranked"])
+def test_combined_provenance_records_both_indexes(
+    combined_provenance_case, retriever,
+):
+    dense, bm25, collector = combined_provenance_case
+    questions_path = evaluation.REPO_ROOT / "eval" / "questions.jsonl"
+
+    result = evaluation.collect_combined_provenance(
+        "heading", questions_path, retriever=retriever,
+    )
+
+    assert result["indexes"] == {
+        "dense": dense["index"], "bm25": bm25["index"],
+    }
+    assert "index" not in result
+    assert collector.call_args_list == [
+        (( "heading", questions_path), {"retriever": "dense"}),
+        (( "heading", questions_path), {"retriever": "bm25"}),
+    ]
+    for name in ("src/hybrid.py", "src/rerank.py"):
+        assert result["implementation_sha256"][name] == hashlib.sha256(
+            (evaluation.REPO_ROOT / name).read_bytes()
+        ).hexdigest()
+        assert name not in dense["implementation_sha256"]
+
+    if retriever == "reranked":
+        assert result["reranker"]["revision"] == (
+            "233902d25c440f23af6f7d6e94d2946bac0bee0a"
+        )
+        assert result["reranker"]["max_pair_tokens"] == 512
+        assert result["reranker"]["truncation"] is False
+    else:
+        assert "reranker" not in result
+
+
+def test_combined_provenance_rejects_different_chunk_mappings(
+    combined_provenance_case,
+):
+    _, bm25, _ = combined_provenance_case
+    bm25["index"]["artifact_sha256"]["chunks.jsonl"] = "different"
+
+    with pytest.raises(ValueError, match="chunk mappings differ"):
+        evaluation.collect_combined_provenance(
+            "heading",
+            evaluation.REPO_ROOT / "eval" / "questions.jsonl",
+            retriever="hybrid",
+        )
+
+
+def test_combined_provenance_rejects_shared_state_changes(
+    combined_provenance_case,
+):
+    _, bm25, _ = combined_provenance_case
+    bm25["dataset"] = {"sha256": "changed"}
+
+    with pytest.raises(ValueError, match="Shared provenance changed"):
+        evaluation.collect_combined_provenance(
+            "heading",
+            evaluation.REPO_ROOT / "eval" / "questions.jsonl",
+            retriever="reranked",
+        )
+
+
+@pytest.mark.parametrize(
+    "run_name", ["", "../day13", "a/b", r"a\b", ".", "a b", 13],
+)
+def test_result_path_rejects_invalid_run_names(run_name):
+    with pytest.raises(ValueError, match="run_name"):
+        evaluation.retrieval_output_path("dense", "fixed", run_name)
+
+
+def assert_named_run_preserves_baseline(case, method):
+    index_name, baseline, calls, _ = case
+    baseline.parent.mkdir(parents=True, exist_ok=True)
+    original = b"Historical baseline must remain unchanged.\n"
+    baseline.write_bytes(original)
+    runner = getattr(evaluation, f"run_{method}_evaluation")
+
+    report = runner(index_name, run_name="day13")
+
+    output = baseline.parent / "day13" / baseline.name
+    saved = json.loads(output.read_text(encoding="utf-8"))
+    assert baseline.read_bytes() == original
+    assert saved["config"]["run_name"] == "day13"
+    assert saved["evaluation"] == report
+    assert len(calls) == 1
+
+    saved_bytes = output.read_bytes()
+    with pytest.raises(FileExistsError):
+        runner(index_name, run_name="day13")
+    assert output.read_bytes() == saved_bytes
+    assert len(calls) == 1
+
+
+def test_named_dense_run_preserves_baseline(dense_runner_case):
+    assert_named_run_preserves_baseline(dense_runner_case, "dense")
+
+
+def test_named_bm25_run_preserves_baseline(bm25_runner_case):
+    assert_named_run_preserves_baseline(bm25_runner_case, "bm25")
+
+
+@pytest.mark.parametrize("method", ["hybrid", "reranked"])
+@pytest.mark.parametrize("scenario", ["success", "changed", "existing"])
+def test_combined_runner_filters_preloads_and_protects_results(
+    dense_runner_case, monkeypatch, method, scenario,
+):
+    from src import bm25, embeddings, hybrid, rerank
+
+    index_name, _, _, _ = dense_runner_case
+    output = evaluation.retrieval_output_path(method, index_name, "day13")
+    before = {"dataset": {"sha256": "before"}}
+    after = (
+        {"dataset": {"sha256": "after"}}
+        if scenario == "changed" else before
+    )
+    collector = Mock(side_effect=[before, after])
+    monkeypatch.setattr(
+        evaluation, "collect_combined_provenance", collector,
+    )
+    index_check = Mock()
+    embedding_loader = Mock()
+    reranker_loader = Mock()
+    monkeypatch.setattr(hybrid, "check_hybrid_indexes", index_check)
+    monkeypatch.setattr(bm25, "load_bm25_index", Mock())
+    monkeypatch.setattr(embeddings, "get_embedding_model", embedding_loader)
+    monkeypatch.setattr(rerank, "get_reranker", reranker_loader)
+    calls = []
+
+    def search(query, selected_index, *, k):
+        # Loading must happen before any timed retrieval.
+        index_check.assert_called_once_with(index_name)
+        embedding_loader.assert_called_once_with()
+        if method == "reranked":
+            reranker_loader.assert_called_once_with()
+        calls.append((query, selected_index, k))
+        return [{
+            "chunk_id": "fixture:0",
+            "path": "gold.md",
+            "text": "Complete fixture passage.",
+            "score": 0.5,
+        }]
+
+    monkeypatch.setattr(hybrid, "hybrid_search", search)
+    monkeypatch.setattr(rerank, "reranked_search", search)
+
+    if scenario == "existing":
+        output.parent.mkdir(parents=True)
+        original = b"Preserved combined result.\n"
+        output.write_bytes(original)
+        with pytest.raises(FileExistsError):
+            evaluation.run_combined_evaluation(
+                index_name, retriever=method, run_name="day13",
+            )
+        assert output.read_bytes() == original
+        collector.assert_not_called()
+        embedding_loader.assert_not_called()
+        assert calls == []
+        return
+
+    if scenario == "changed":
+        with pytest.raises(ValueError, match="changed during the run"):
+            evaluation.run_combined_evaluation(
+                index_name, retriever=method, run_name="day13",
+            )
+        assert not output.exists()
+        assert not output.parent.exists()
+    else:
+        report = evaluation.run_combined_evaluation(
+            index_name, retriever=method, run_name="day13",
+        )
+        saved = json.loads(output.read_text(encoding="utf-8"))
+        assert saved["evaluation"] == report
+        assert saved["provenance"] == before
+        assert saved["config"]["candidate_depth_per_method"] == 50
+        assert saved["config"]["rrf_constant"] == 60
+        assert saved["config"]["timing"][
+            "models_and_indexes_loaded_before_timing"
+        ] is True
+        assert [row["id"] for row in report["per_question"]] == ["q001"]
+        assert report["per_question"][0]["elapsed_ms"] >= 0
+        if method == "reranked":
+            assert saved["config"]["rerank_candidates"] == 20
+        else:
+            reranker_loader.assert_not_called()
+
+    assert calls == [("Question 1", index_name, 10)]
+    assert collector.call_count == 2
+
+
+def test_dense_model_is_loaded_before_retrieval(
+    dense_runner_case, monkeypatch,
+):
+    from src import embeddings, retrieve
+
+    index_name, output, _, _ = dense_runner_case
+    loader = Mock()
+    monkeypatch.setattr(embeddings, "get_embedding_model", loader)
+
+    def search(query, selected_index, *, k):
+        loader.assert_called_once_with()
+        return [{"path": "gold.md"}]
+
+    monkeypatch.setattr(retrieve, "dense_search", search)
+
+    evaluation.run_dense_evaluation(index_name)
+
+    saved = json.loads(output.read_text(encoding="utf-8"))
+    assert saved["config"]["timing"] == evaluation.TIMING_POLICY
+
+
+@pytest.mark.parametrize("method", ["dense", "bm25", "hybrid", "reranked"])
+def test_cli_routes_named_runs_without_real_retrieval(
+    monkeypatch, capsys, method,
+):
+    report = {
+        "n_questions": 1,
+        "ks": [1, 3, 5, 10],
+        "hit_counts": {"1": 1, "3": 1, "5": 1, "10": 1},
+        "recall": {"1": 1.0, "3": 1.0, "5": 1.0, "10": 1.0},
+        "mrr@10": 1.0,
+    }
+    dense = Mock(return_value=report)
+    bm25 = Mock(return_value=report)
+    combined = Mock(return_value=report)
+    monkeypatch.setattr(evaluation, "run_dense_evaluation", dense)
+    monkeypatch.setattr(evaluation, "run_bm25_evaluation", bm25)
+    monkeypatch.setattr(evaluation, "run_combined_evaluation", combined)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "evaluate.py", "--retriever", method,
+            "--index", "heading", "--run-name", "day13",
+        ],
+    )
+
+    evaluation.main()
+
+    if method == "dense":
+        dense.assert_called_once_with("heading", run_name="day13")
+        bm25.assert_not_called()
+        combined.assert_not_called()
+    elif method == "bm25":
+        bm25.assert_called_once_with("heading", run_name="day13")
+        dense.assert_not_called()
+        combined.assert_not_called()
+    else:
+        combined.assert_called_once_with(
+            "heading", retriever=method, run_name="day13",
+        )
+        dense.assert_not_called()
+        bm25.assert_not_called()
+
+    assert (
+        f"eval/results/retrieval/day13/{method}_heading_dev.json"
+        in capsys.readouterr().out
+    )

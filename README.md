@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 12:
+Implemented through Day 13:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -12,10 +12,12 @@ Implemented through Day 12:
 - Built and verified normalized dense indexes for both configurations.
 - Added a command-line search and inspected 15 shared queries per configuration.
 - Reviewed retrieval failures and recorded hypotheses for Week 2 experiments.
-- Created 46 source-checked questions: 24 lookup, 12 multi-step and 10 new-or-changed, with an evaluation-data checker.
+- Completed 60 evaluation questions: 24 lookup, 12 multi-step, 12 new-or-changed and 12 unanswerable, with source-label validation and documented absence checks.
 - Added reusable dev-only retrieval evaluation and saved both dense baseline runs with provenance.
 - Built and verified BM25 indexes for both chunkers, evaluated both on answerable dev questions and compared their rankings with dense retrieval.
-- All 185 tests passed on Day 12.
+- Implemented hybrid reciprocal rank fusion and pinned cross-encoder reranking, with complete-input guards.
+- Saved six matched retrieval runs on 36 answerable dev questions, including per-query latency and provenance.
+- All 270 tests passed on Day 13.
 
 Manual observations, failures and formal retrieval baselines are recorded
 in NOTES.md. Answer generation and answer evaluation are upcoming.
@@ -337,14 +339,34 @@ and a retrieved page can still lack the required answering passage.
 
 ## Evaluation questions
 
-`eval/questions.jsonl` currently contains 46 answerable questions:
-24 lookup, 12 multi-step and 10 new_or_changed, split into 35 dev and 11 test.
+`eval/questions.jsonl` contains 60 questions:
+
+| Type | Count |
+| --- | ---: |
+| lookup | 24 |
+| multi_step | 12 |
+| new_or_changed | 12 |
+| unanswerable | 12 |
+
+The split contains 45 dev questions (36 answerable, 9 unanswerable) and
+15 test questions (12 answerable, 3 unanswerable).
+
 Each record includes a stable ID, question, type, answerability, gold answer,
-source references and split.
+source references and split. Unanswerable records have an empty gold answer
+and no gold sources.
+
+Current dataset SHA256:
+`cb13412b789ac5b8eebd1c70873f7e908c5a83ff80a2452f16f387353e4d3733`.
 
 The new_or_changed category covers recently contributed model pages identified
-during corpus review. It does not establish when each feature was introduced or
-whether a closed-book model can answer the question.
+during corpus review. It does not establish when each feature was introduced
+or whether a closed-book model can answer the question.
+
+Unanswerable means the requested answer is unsupported by the pinned
+documentation corpus. Searches and contextual absence checks across all
+752 Markdown pages, including excluded pages, are recorded in
+[eval/unanswerable_checks.md](eval/unanswerable_checks.md).
+These labels do not establish that answers are unavailable externally.
 
 Source paths are relative to `docs/source/en`. Source headings use the full
 H1–H3 hierarchy, matching the structural scanner. For content under deeper
@@ -356,24 +378,24 @@ Validate the dataset from the repository root:
 .\.venv\Scripts\python.exe -B -m eval.check_questions
 ```
 
-The checker verifies the downloaded corpus commit, record structure, sequential
-IDs, duplicate questions, type/answerability consistency, split assignments,
-selected source-file existence and heading references outside code and comments.
-It does not verify whether a source supports a gold answer; that requires manual
-source review.
+The checker verifies the downloaded corpus commit, record structure,
+sequential IDs, duplicate questions, type/answerability consistency,
+split assignments, selected source-file existence and heading references
+outside code and comments. Semantic support and absence require manual review.
 
 Multi-step records must cite at least two distinct path-and-heading references.
-Manual review must also establish that answering the question requires combining
-the cited evidence; two references alone do not prove this.
+Manual review must also establish that answering the question requires
+combining the cited evidence; two references alone do not prove this.
 
-Every fourth question in authoring order is assigned to test. Currently these
-are q004, q008, q012, q016, q020, q024, q028, q032, q036, q040 and q044.
-Preserve IDs and order when extending the dataset.
+Every fourth question in authoring order is assigned to test, from q004
+through q060. Preserve IDs and order when extending the dataset.
 Source-label validation is allowed for test questions; retrieval and generation
 performance must not be inspected during development.
 
-The Day 6 manual queries remain development examples. Formal retrieval results
-below use the Day 10 question dataset. Answer-quality evaluation is upcoming.
+The Day 6 manual queries remain development examples. Day 11–12 retrieval
+results use the original 35 answerable dev questions; Day 13 results use
+36 answerable dev questions from the expanded dataset. Answer-quality and
+abstention evaluation are upcoming.
 
 ## BM25 indexing and search
 
@@ -410,54 +432,141 @@ ordered by saved row number. Loaded indexes are cached per process; restart
 after replacing artifacts. Compare retrieval methods using evaluation
 metrics rather than their raw score scales.
 
-## Retrieval evaluation
+## Hybrid retrieval and reranking
 
-Run from the repository root after building the corresponding indexes:
+`hybrid_search(query, index_name, k=5)` combines up to 50 dense and 50
+BM25 candidates using reciprocal rank fusion:
+
+`score(chunk) = sum(1 / (60 + rank))`
+
+Ranks are one-based. Matching chunk IDs are merged, and equal fused scores
+use ascending chunk_id. Both indexes must have identical complete chunk
+mappings. Returned records preserve full source content and contributing
+ranks in rrf_ranks.
+
+`reranked_search(query, index_name, k=5)` scores the top 20 hybrid candidates
+with `cross-encoder/ms-marco-MiniLM-L6-v2`, pinned to revision
+`233902d25c440f23af6f7d6e94d2946bac0bee0a`.
+It uses CPU float32 and Identity activation, returning raw relevance scores.
+Equal scores retain hybrid order. hybrid_score, hybrid_rank and rrf_ranks
+preserve the preceding ranking information.
+
+Complete query-passage pairs, including special tokens, must fit within
+512 tokens. All pairs are checked before inference. Oversized pairs fail
+without silently truncating source content. The default output is five
+chunks; requesting ten supports retrieval evaluation.
+
+### Cache the pinned reranker
+
+Run once before reranked retrieval:
 
 ```powershell
-.\.venv\Scripts\python.exe -B -m src.evaluate --retriever dense --index fixed
-.\.venv\Scripts\python.exe -B -m src.evaluate --retriever dense --index heading
-.\.venv\Scripts\python.exe -B -m src.evaluate --retriever bm25 --index fixed
-.\.venv\Scripts\python.exe -B -m src.evaluate --retriever bm25 --index heading
+@'
+import torch
+from sentence_transformers import CrossEncoder
+from src.config import (
+    RERANKER_MODEL,
+    RERANKER_REVISION,
+    RERANKER_MAX_LENGTH,
+)
+
+model = CrossEncoder(
+    RERANKER_MODEL,
+    revision=RERANKER_REVISION,
+    device="cpu",
+    trust_remote_code=False,
+    max_length=RERANKER_MAX_LENGTH,
+    model_kwargs={"dtype": torch.float32},
+    activation_fn=torch.nn.Identity(),
+)
+assert model.max_seq_length == RERANKER_MAX_LENGTH
+assert model.config.max_position_embeddings == RERANKER_MAX_LENGTH
+assert model.num_labels == 1
+assert next(model.parameters()).dtype == torch.float32
+print("Pinned reranker cached.")
+'@ | .\.venv\Scripts\python.exe -B -
 ```
 
-Each command refuses an existing result file. Saved baselines are under
-`eval/results/retrieval/`, named `<retriever>_<chunker>_dev.json`.
-Omitting `--retriever` selects dense retrieval.
+Runtime retrieval loads the pinned models from the local cache.
+
+## Retrieval evaluation
+
+Run from the repository root after building the corresponding indexes and
+caching the required models:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever dense --index fixed --run-name day13
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever dense --index heading --run-name day13
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever bm25 --index fixed --run-name day13
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever bm25 --index heading --run-name day13
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever hybrid --index heading --run-name day13
+.\.venv\Scripts\python.exe -B -m src.evaluate --retriever reranked --index heading --run-name day13
+```
+
+These results already exist, so repeating these commands refuses to overwrite
+them. Use a new run name for a deliberate new experiment.
+Named runs are saved under `eval/results/retrieval/<run-name>/`, with filenames
+`<retriever>_<chunker>_dev.json`. Run names contain letters, digits, underscores
+or hyphens and start with a letter or digit.
+
+Without --run-name, results use the original retrieval results directory.
+Omitting --retriever selects dense retrieval. Historical Day 11–12 files
+remain preserved and are documented in NOTES.md.
 
 The reusable `eval_retrieval(retriever, questions, ks=(1, 3, 5, 10))` function
 accepts a callable with the interface `retriever(query, k=...)`. Questions must
-first pass dataset validation. The function filters to answerable dev questions
-before retrieval and requests the maximum k once per question.
+first pass dataset validation. It filters to answerable dev questions before
+retrieval and requests the maximum k once per question.
 
 A hit means a retrieved chunk's source path matches any gold source page.
 Following the project plan, recall@k is the fraction of evaluated questions
 with at least one hit within the first k chunk ranks. Repeated pages retain
 their chunk ranks; results are not collapsed by page.
 
-MRR@10 averages the reciprocal rank of the first hit within 10 chunks, with
-zero for a miss. Both metric denominators include all 35 evaluated questions.
+MRR@10 averages the reciprocal rank of the first hit within 10 chunks,
+with zero for a miss. Both denominators include all 36 evaluated questions.
 A page hit does not establish complete answering evidence or coverage of
 every source required by a multi-step question.
 
+### Day 13 matched dev results
+
+All six configurations use the same expanded dataset and 36 answerable dev
+questions. Recall entries show questions with a hit / 36.
+
 | Configuration | recall@1 | recall@3 | recall@5 | recall@10 | MRR@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Dense + fixed | 25/35 (71.43%) | 30/35 (85.71%) | 31/35 (88.57%) | 31/35 (88.57%) | 0.7867 |
-| Dense + heading | 25/35 (71.43%) | 32/35 (91.43%) | 33/35 (94.29%) | 34/35 (97.14%) | 0.8167 |
-| BM25 + fixed | 27/35 (77.14%) | 31/35 (88.57%) | 33/35 (94.29%) | 34/35 (97.14%) | 0.8312 |
-| BM25 + heading | 26/35 (74.29%) | 34/35 (97.14%) | 34/35 (97.14%) | 34/35 (97.14%) | 0.8333 |
+| Dense + fixed | 26/36 | 31/36 | 32/36 | 32/36 | 0.7926 |
+| Dense + heading | 26/36 | 33/36 | 34/36 | 35/36 | 0.8218 |
+| BM25 + fixed | 28/36 | 32/36 | 34/36 | 35/36 | 0.8359 |
+| BM25 + heading | 27/36 | 35/36 | 35/36 | 35/36 | 0.8380 |
+| Hybrid + heading | 30/36 | 35/36 | 35/36 | 35/36 | 0.8981 |
+| Reranked hybrid + heading | 33/36 | 34/36 | 35/36 | 35/36 | 0.9329 |
+
+Reranking improves rank-1 hits and MRR@10, while recall@3 falls from 35/36
+to 34/36. Mean query latency is 65.72 ms for hybrid heading and 1053.27 ms
+for reranked hybrid heading. NOTES.md records latency for all six runs and
+per-question ranking changes.
+
+Per-question elapsed_ms covers the retriever call and result materialization,
+including input-length checks. Models and indexes are loaded before timing;
+no inference warmup is performed. Metric calculation, provenance and result
+serialization are excluded. These are local CPU observations from one run,
+not repeated latency benchmarks.
 
 These are small development-set comparisons. Dense and BM25 use identical
 chunk mappings within each chunker. Comparisons between chunkers also differ
 in size policy, overlap and heading context, so differences cannot be
-attributed solely to heading boundaries. The 11 held-out test questions have
-not undergone retrieval or generation evaluation.
+attributed solely to heading boundaries. Earlier 35-question results use a
+different denominator. All 15 held-out test questions remain unevaluated.
 
 Each saved run includes configuration, metric definitions, dataset SHA256,
-corpus commit and cleanliness, the full index manifest and actual artifact
-hashes, implementation hashes, package versions, Python/platform details,
+corpus commit and cleanliness, index manifests and actual artifact hashes,
+implementation hashes, package versions, Python/platform details,
 Git commit and dirty status, and complete per-question retrieved records.
-The runner rejects provenance changes during evaluation and preserves
+Hybrid and reranked runs record both indexes; reranked runs also record
+the pinned cross-encoder settings.
+
+The runners reject provenance changes during evaluation and preserve
 existing source files, indexes and result files.
 
 ## Tests
@@ -479,7 +588,14 @@ protection, retriever-specific provenance and dense/BM25 runner integration
 with fake retrievers. BM25 tests cover tokenization, source preservation,
 serialization, row alignment, lexical matching, tie-breaking and rejection
 of changed artifacts or incompatible settings.
-All 185 tests passed on Day 12.
+Hybrid and reranker tests cover fusion calculations, deterministic ties,
+matching chunk mappings, candidate depth, complete-record preservation,
+pair-length guards, score validation and reranking order. Evaluation tests
+also cover timing boundaries, named-run protection, combined provenance,
+model loading before retrieval and CLI routing. Retrieval and runner tests
+use synthetic fixtures; a separate real-model synthetic smoke check verified
+scoring and overflow rejection.
+All 270 tests passed on Day 13.
 
 Chunking tests require the cached pinned tokenizer. Embedding length checks
 also require the cached complete model. The corpus integration test requires
@@ -500,6 +616,8 @@ src/
   retrieve.py                                   Verified index loading and search CLI
   evaluate.py                                   Retrieval metrics, provenance and evaluation CLI
   bm25.py                                       BM25 indexing, verified loading and search CLI
+  hybrid.py                                    Reciprocal rank fusion and verified hybrid search
+  rerank.py                                    Pinned cross-encoder scoring and reranked search
 
 tests/
   test_ingest.py                                Ingestion tests
@@ -510,11 +628,15 @@ tests/
   test_questions.py                             Evaluation-data validation tests
   test_evaluate.py                              Retrieval metric, writer and runner tests
   test_bm25.py                                  BM25 tokenization, indexing and retrieval tests
+  test_hybrid.py                               Fusion and hybrid retrieval tests
+  test_rerank.py                               Complete-pair scoring and reranking tests
 
 eval/
   questions.jsonl                               Source-checked evaluation questions and labels
   check_questions.py                            Dataset and source-reference validation
   results/retrieval/                            Tracked dense and BM25 dev baseline results
+  unanswerable_checks.md                       Pinned-corpus absence review
+  results/retrieval/day13/                      Six matched dev runs with per-query timing
 
 data/
   selection_report.csv                          Tracked selection decisions and evidence
