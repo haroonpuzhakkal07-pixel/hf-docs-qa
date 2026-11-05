@@ -486,3 +486,26 @@ These are local CPU observations from one run, not repeated latency benchmarks.
 - next: Review saved changes, commit and push Day 15. Day 16 introduces
   the numbered-passage answer prompt, citations and refusal behavior.
   Preserve complete inputs and keep held-out TEST performance untouched.
+
+## Day 16 grounded answer prompt
+
+- did: Added the numbered-passage prompt and formatter. Used BM25 heading
+  with k=5 and a 3,000-token budget for the complete Gemini input. The
+  adapter checks Gemini's preflight count on fresh requests and the saved
+  count on cache hits. Over-budget requests fail without truncation.
+- verification: All 304 tests passed in 51.99 seconds. Six manual DEV
+  checks used 1,062 to 1,696 input tokens. Both unanswerable cases returned
+  the exact refusal, and all four answerable responses cited evidence.
+
+| DEV ID | Input tokens | Manual observation |
+| --- | ---: | --- |
+| q003 | 1,696 | Cited `[1]` for `gradient_accumulation_steps`. |
+| q049 | 1,671 | Exact refusal. The retrieved latency figure excludes compute time. |
+| q054 | 1,586 | Exact refusal. The adapter example names the model repository without a commit SHA. |
+| q035 | 1,551 | Cited support for both parts. Grouped two citations as `[1, 2]` and included a spacing typo. |
+| q038 | 1,539 | Cited the 4× detail benefit. Omitted the default 16× mode's faster inference. |
+| q010 | 1,062 | Cited support for `modules_to_save=["lm_head"]`. A citation after the closing code fence may affect Markdown rendering. |
+
+- scope: Manual checks used DEV questions only. These observations describe
+  the six inspected answers.
+- next: Build the reusable generation pipeline on Day 17.

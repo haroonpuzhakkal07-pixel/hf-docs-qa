@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 15:
+Implemented through Day 16:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -18,10 +18,11 @@ Implemented through Day 15:
 - Implemented hybrid reciprocal rank fusion and pinned cross-encoder reranking, with complete-input guards.
 - Saved six matched retrieval runs on 36 answerable dev questions, including per-query latency and provenance.
 - Added checked Gemini completions and persistent response caching.
-- All 302 tests passed on Day 15.
+- Added the grounded answer prompt and verified citations and refusals on six manual DEV questions.
+- All 304 tests passed on Day 16.
 
 Manual observations, failures and formal retrieval baselines are recorded
-in NOTES.md. Answer generation and answer evaluation are upcoming.
+in NOTES.md. The reusable generation pipeline and formal answer evaluation are upcoming.
 
 ## Corpus
 
@@ -583,9 +584,8 @@ Dense heading is faster at 24.96 ms but scores 34/36 at recall@5,
 allowance. Selection follows the plan's recall@5 and speed rule.
 
 Hybrid and reranked retrieval retain advantages at rank 1 and MRR@10.
-This selection does not establish superior answer quality; generation
-and answer evaluation have not yet been implemented. Timings remain
-single-run local CPU observations.
+This selection is based on retrieval metrics. Timings are single-run
+local CPU observations.
 
 Reviewed the selected configuration's only miss@5, q026, also a miss@10.
 Both gold facts survive completely in the indexed passages, and the gold
@@ -637,6 +637,11 @@ countTokens before generation. Inputs exceeding 1,048,576 tokens are
 rejected without generation or truncation. max_tokens must be between
 1 and the model's 65,536-token output limit; its default is 500.
 
+Pass `input_token_budget` to set a lower limit for the complete input.
+Fresh requests use Gemini's `countTokens` result, and cache hits use the
+saved preflight count. Requests above the budget raise an error without
+truncating the input.
+
 Only a nonempty text response with finishReason STOP and valid usage
 metadata is accepted. Responses stopped by the output limit or other
 abnormal finish reasons are rejected. Each HTTP request has a 60-second
@@ -686,8 +691,23 @@ The second process blocked HTTP client creation and credential loading,
 returned the same answer and cache key, and reported zero API usage.
 These are smoke observations, not latency benchmarks.
 
-No evaluation questions were sent to the LLM. Retrieval settings,
+On Day 15, no evaluation questions were sent to the LLM. Retrieval settings,
 datasets, indexes and historical results remain unchanged.
+
+## Grounded answer prompt
+
+`src/prompting.py` formats up to five chunks in retrieval order, with a
+passage number, source path, heading and complete text. The system prompt
+asks for concise answers supported by those passages, citations such as
+`[1]`, and the exact refusal `I can't find this in the documentation.`
+when the evidence is insufficient.
+
+Day 16 used BM25 with the heading index and `k=5`. The 3,000-token budget
+covers the whole request, including the system instruction, question,
+passage labels and text. Gemini counted 1,062 to 1,696 input tokens across
+the six manual DEV checks. All four answerable responses cited supporting
+passages, and both unanswerable responses returned the exact refusal.
+See NOTES.md for the individual observations.
 
 ## Tests
 
@@ -715,12 +735,13 @@ also cover timing boundaries, named-run protection, combined provenance,
 model loading before retrieval and CLI routing. Retrieval and runner tests
 use synthetic fixtures; a separate real-model synthetic smoke check verified
 scoring and overflow rejection.
-The 32 LLM tests use mocked HTTP responses and temporary cache directories.
+The 34 LLM tests use mocked HTTP responses and temporary cache directories.
 They cover complete-input preservation and limits, usage, timing,
 incomplete-output rejection, error handling, persistent reuse without
 credentials or HTTP, cache-key changes, historical-entry preservation
-and corrupt-entry rejection.
-All 302 tests passed on Day 15.
+and corrupt-entry rejection. They also cover budget enforcement before
+generation and on cache hits.
+All 304 tests passed on Day 16.
 
 Chunking tests require the cached pinned tokenizer. Embedding length checks
 also require the cached complete model. The corpus integration test requires
@@ -744,6 +765,7 @@ src/
   hybrid.py                                    Reciprocal rank fusion and verified hybrid search
   rerank.py                                    Pinned cross-encoder scoring and reranked search
   llm.py                                       Checked Gemini completions and persistent response cache
+  prompting.py                                 Grounded answer prompt and complete-passage formatting
 
 tests/
   test_ingest.py                                Ingestion tests

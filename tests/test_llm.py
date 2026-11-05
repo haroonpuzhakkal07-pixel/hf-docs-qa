@@ -348,3 +348,33 @@ def test_failed_generation_creates_no_cache(api):
         llm.complete("System", "Prompt")
 
     assert not (llm.REPO_ROOT / "data/cache").exists()
+
+
+def test_input_budget_stops_before_generation(api):
+    calls, responses = api
+    responses.append((200, {"totalTokens": 3001}))
+
+    with pytest.raises(ValueError, match="3001 tokens; limit is 3000"):
+        llm.complete("System", "Complete prompt", input_token_budget=3000)
+
+    assert len(calls) == 1
+    assert calls[0]["url"].endswith(":countTokens")
+    assert not (llm.REPO_ROOT / "data/cache/llm").exists()
+
+
+def test_cached_response_must_fit_requested_budget(api):
+    calls, responses = api
+    responses.extend([
+        (200, {"totalTokens": 3000}),
+        (200, successful_response()),
+    ])
+    first = llm.complete("System", "Complete prompt", input_token_budget=3000)
+    assert first["preflight_tokens"] == 3000
+
+    with pytest.raises(ValueError, match="3000 tokens; limit is 2999"):
+        llm.complete("System", "Complete prompt", input_token_budget=2999)
+
+    cached = llm.complete("System", "Complete prompt", input_token_budget=3001)
+    assert cached["cache_hit"] is True
+    assert cached["cache_key"] == first["cache_key"]
+    assert len(calls) == 2

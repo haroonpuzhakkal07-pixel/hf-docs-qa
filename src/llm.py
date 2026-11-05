@@ -72,7 +72,15 @@ def _validate_inputs(system, prompt, temperature, max_tokens):
         )
 
 
-def _complete_uncached(system, prompt, temperature=0, max_tokens=500):
+def _check_input_limit(tokens, limit):
+    if tokens > limit:
+        raise ValueError(
+            f"Complete input has {tokens} tokens; "
+            f"limit is {limit}. Text was not truncated."
+        )
+
+
+def _complete_uncached(system, prompt, temperature, max_tokens, *, input_limit):
     """Return a complete text response, usage and elapsed milliseconds.
 
     Reads the key specifically from the repository .env file.
@@ -114,11 +122,7 @@ def _complete_uncached(system, prompt, temperature=0, max_tokens=500):
             },
         )
         input_tokens = _token_count(counted, "totalTokens")
-        if input_tokens > INPUT_TOKEN_LIMIT:
-            raise ValueError(
-                f"Complete input has {input_tokens} tokens; "
-                f"limit is {INPUT_TOKEN_LIMIT}. Text was not truncated."
-            )
+        _check_input_limit(input_tokens, input_limit)
 
         generation_started = perf_counter()
         data = _post(client, "generateContent", payload)
@@ -204,15 +208,27 @@ def _validate_cached_result(result):
             raise RuntimeError(f"Invalid cached timing: {name}")
 
 
-def complete(system, prompt, temperature=0, max_tokens=500):
+def complete(system, prompt, temperature=0, max_tokens=500, *, input_token_budget=None):
     """Return a completion, reusing a successful saved response when present.
 
     Top-level token counts describe the original response.
     api_usage describes usage for this call and is zero on cache hits.
     latency_ms measures this call, including cache access.
     Original response timings are retained separately.
+
+    input_token_budget caps the complete input, including on cache hits.
     """
     _validate_inputs(system, prompt, temperature, max_tokens)
+    input_limit = INPUT_TOKEN_LIMIT
+    if input_token_budget is not None:
+        if (
+            type(input_token_budget) is not int
+            or not 1 <= input_token_budget <= INPUT_TOKEN_LIMIT
+        ):
+            raise ValueError(
+                f"input_token_budget must be an integer from 1 to {INPUT_TOKEN_LIMIT}"
+            )
+        input_limit = input_token_budget
     started = perf_counter()
 
     request = {
@@ -260,10 +276,11 @@ def complete(system, prompt, temperature=0, max_tokens=500):
             )
         result = saved.get("result")
         _validate_cached_result(result)
+        _check_input_limit(result["preflight_tokens"], input_limit)
 
     if not cache_hit:
         result = _complete_uncached(
-            system, prompt, temperature=temperature, max_tokens=max_tokens
+            system, prompt, temperature, max_tokens, input_limit=input_limit
         )
         _validate_cached_result(result)
         saved = {
