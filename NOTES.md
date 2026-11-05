@@ -509,3 +509,33 @@ These are local CPU observations from one run, not repeated latency benchmarks.
 - scope: Manual checks used DEV questions only. These observations describe
   the six inspected answers.
 - next: Build the reusable generation pipeline on Day 17.
+
+## Day 17 generation pipeline and answer baselines
+
+- Added `answer(question, config)` and a DEV runner. The grounded
+  configuration uses BM25 heading at k=5 and maps individual and grouped
+  citations to retrieved chunk IDs. Closed-book skips retrieval.
+- Estimated about 117,425 tokens before generation using one token per
+  four UTF-8 bytes for input and the full 500-token output allowance per
+  answer. The adapter enforced the 3,000-token budget on complete inputs.
+- Saved two JSONL files under `eval/results/answers/`. Verified that both
+  contain the same 45 DEV IDs in dataset order (36 answerable and 9
+  unanswerable). Read 10 responses across five matched questions.
+- Focused generation and LLM tests passed (40 tests). The full suite
+  passed (310 tests in 44.15 seconds). Formal judging begins on Day 18.
+| Configuration | Saved answers | Cache hits | Original response tokens | API response tokens in completed invocation |
+| --- | ---: | ---: | ---: | ---: |
+| Closed-book | 45 | 8 | 4,363 | 3,362 |
+| BM25 heading | 45 | 6 | 73,472 | 64,130 |
+
+The first closed-book attempt stopped at q003 on HTTP 503. The completed
+run reused cached responses. The API column covers the completed
+invocations and excludes calls from earlier attempts.
+
+| DEV ID | Manual observation |
+| --- | --- |
+| q003 | Both named `gradient_accumulation_steps`. BM25 heading also explained its role and cited the documentation. |
+| q026 | Closed-book incorrectly recommended left padding for both models. BM25 heading returned the exact refusal on the known recall@5 miss. |
+| q035 | Both covered forwarding extra keyword arguments and matching the registration key. Both omitted the explicit subclass and distinct model-type requirements from the reference. The grounded answer used individual and grouped citations. |
+| q049 | BM25 heading returned the exact refusal. Closed-book said it did not know. |
+| q054 | BM25 heading returned the exact refusal. Closed-book said it did not know. |

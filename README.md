@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 16:
+Implemented through Day 17:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -20,9 +20,10 @@ Implemented through Day 16:
 - Added checked Gemini completions and persistent response caching.
 - Added the grounded answer prompt and verified citations and refusals on six manual DEV questions.
 - All 304 tests passed on Day 16.
+- Saved closed-book and BM25 heading answers for the same 45 DEV questions and manually reviewed 10 responses.
 
-Manual observations, failures and formal retrieval baselines are recorded
-in NOTES.md. The reusable generation pipeline and formal answer evaluation are upcoming.
+Manual observations, failures and baseline results are recorded in NOTES.md.
+Formal answer judging begins on Day 18.
 
 ## Corpus
 
@@ -708,6 +709,34 @@ passage labels and text. Gemini counted 1,062 to 1,696 input tokens across
 the six manual DEV checks. All four answerable responses cited supporting
 passages, and both unanswerable responses returned the exact refusal.
 See NOTES.md for the individual observations.
+
+## DEV answer generation
+
+`answer(question, config)` supports `closed_book` and `bm25_heading`.
+Closed-book sends the question alone and permits the model to say it does
+not know. BM25 heading supplies up to five complete ranked passages. It
+uses each citation number to look up the corresponding passage and
+returns cited chunk IDs in first-citation order. Both configurations use
+the same Gemini adapter, temperature 0, a 500-token output cap and a
+3,000-token complete-input budget.
+
+From the repository root, run each configuration separately.
+
+```powershell
+.\.venv\Scripts\python.exe -B -m eval.run_answers closed_book
+.\.venv\Scripts\python.exe -B -m eval.run_answers bm25_heading
+```
+
+The runner validates the dataset and selects the same 45 DEV questions
+for each configuration, including 36 answerable and 9 unanswerable
+questions. It writes one JSONL file per configuration under
+`eval/results/answers/` after all selected answers succeed. Existing
+result files are protected from overwrites.
+
+Each row includes the answer, retrieved and cited chunk IDs, retrieval
+and LLM timing in milliseconds, the preflight token count, original
+response token usage and current-call API response token usage. Cache hits
+retain original response usage and report zero current API usage.
 
 ## Tests
 
