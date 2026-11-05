@@ -461,3 +461,28 @@ These are local CPU observations from one run, not repeated latency benchmarks.
 - next: Review the saved Day 14 changes, commit and push, then create and
   push the v0.2 milestone tag. Day 15 begins LLM access and caching.
   The last full test run remains Day 13: 270 passed.
+
+## Day 15 LLM access and disk caching
+
+- did: Created a separate Gemini Free tier project and kept the API key
+  in an ignored, untracked .env; added a placeholder-only .env.example.
+  Implemented src/llm.py with complete-input token counting, checked text
+  responses, token usage, timing and a protected disk cache. Added 32
+  mocked LLM tests. The full suite passed: 302 tests in 49.22 seconds.
+- did: Verified a synthetic live completion and persistent reuse in a
+  separate process with HTTP and credential loading blocked. The cached
+  smoke run used 21 input tokens, 5 output tokens and no thinking tokens
+  on its miss; the hit reported zero API usage. Observed about 1,461 ms
+  for the miss and 13 ms for the hit; these are not benchmark results.
+- decisions: Use gemini-3.5-flash-lite, temperature 0, MINIMAL thinking
+  and default max_tokens=500. The project's observed free quotas were
+  15 requests/minute, 250K input tokens/minute and 500 requests/day.
+  These account observations are not guaranteed future limits.
+- broke: No failing tests remain. The API reports its model alias as
+  modelVersion, so fresh generation cannot be claimed to use an immutable
+  dated revision. Cached responses preserve the original reported value.
+  Concurrent cache misses are not coordinated; cache writes refuse
+  existing files and corrupt entries fail without automatic regeneration.
+- next: Review saved changes, commit and push Day 15. Day 16 introduces
+  the numbered-passage answer prompt, citations and refusal behavior.
+  Preserve complete inputs and keep held-out TEST performance untouched.

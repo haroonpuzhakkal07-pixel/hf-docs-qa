@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 14:
+Implemented through Day 15:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -17,7 +17,8 @@ Implemented through Day 14:
 - Built and verified BM25 indexes for both chunkers, evaluated both on answerable dev questions and compared their rankings with dense retrieval.
 - Implemented hybrid reciprocal rank fusion and pinned cross-encoder reranking, with complete-input guards.
 - Saved six matched retrieval runs on 36 answerable dev questions, including per-query latency and provenance.
-- All 270 tests passed on Day 13.
+- Added checked Gemini completions and persistent response caching.
+- All 302 tests passed on Day 15.
 
 Manual observations, failures and formal retrieval baselines are recorded
 in NOTES.md. Answer generation and answer evaluation are upcoming.
@@ -598,6 +599,96 @@ to that one actual case.
 No dataset labels, retrieval settings, indexes or historical results were
 changed. Held-out TEST performance remains untouched.
 
+## LLM access and completion cache
+
+`src/llm.py` provides:
+
+```python
+from src.llm import complete
+
+result = complete(
+    system="Follow the requested output format. Return only the requested text.",
+    prompt="Return exactly: DAY15_OK",
+    temperature=0,
+    max_tokens=500,
+)
+print(result["text"])
+```
+
+Uses Gemini Developer API model `gemini-3.5-flash-lite` with explicit
+MINIMAL thinking. The existing httpx and python-dotenv dependencies are
+sufficient; no additional packages were installed.
+
+### Credentials
+
+For a new checkout, copy `.env.example` to `.env` only if `.env` does not
+already exist. Replace its placeholder with your Gemini API key locally.
+The adapter reads GEMINI_API_KEY specifically from the repository `.env`,
+rather than selecting a key from shell environment variables.
+
+Keep `.env` private and ignored by Git. `.env.example` contains only a
+placeholder. For the zero-budget setup, use a key belonging to a project
+verified as Free tier and leave billing unlinked.
+
+### Input and response handling
+
+The adapter sends the complete system instruction and prompt to
+countTokens before generation. Inputs exceeding 1,048,576 tokens are
+rejected without generation or truncation. max_tokens must be between
+1 and the model's 65,536-token output limit; its default is 500.
+
+Only a nonempty text response with finishReason STOP and valid usage
+metadata is accepted. Responses stopped by the output limit or other
+abnormal finish reasons are rejected. Each HTTP request has a 60-second
+timeout and no automatic retries. HTTP error messages omit credentials
+and server response bodies.
+
+### Persistent cache and returned fields
+
+Successful completions are saved under `data/cache/llm/`, covered by the
+existing data ignore rule. The SHA256 key includes complete prompts,
+model ID, generation settings, endpoint, token limits, cache schema and
+implementation-file hash. Credentials are excluded.
+
+Entries preserve complete request text, response text, reported model
+version, usage and original timings. Changed requests or implementation
+bytes create separate entries without replacing historical ones.
+Malformed or incompatible entries raise an error without HTTP fallback.
+Failed completions are not cached. Writes refuse existing cache files;
+concurrent cache misses are not coordinated.
+
+A cache hit requires neither credentials nor HTTP access.
+
+| Field | Meaning |
+| --- | --- |
+| text | Complete answer text |
+| model, model_version | Requested model and provider-reported version |
+| tokens_in, tokens_out, thinking_tokens, total_tokens | Original generation usage, retained on cache hits |
+| preflight_tokens | Original complete-input token count |
+| api_usage | Generation usage for this call; all zero on cache hits; excludes the separate token-counting request |
+| cache_hit, cache_key | Reuse status and cache-entry identifier |
+| latency_ms | Current call duration, including cache access or writing |
+| generation_ms | Generation-request duration; zero on cache hits |
+| original_latency_ms, original_generation_ms | Original uncached adapter and generation-request durations |
+| finish_reason | STOP for accepted responses |
+
+Temperature zero does not guarantee identical fresh API responses.
+Cache reuse preserves a saved response. The live API reported
+model_version as the model alias, not an immutable dated revision;
+fresh calls may therefore use a changed serving model.
+
+### Verification
+
+A synthetic live call returned DAY15_OK with 21 input tokens, 5 output
+tokens and no thinking tokens. A separate cached run took approximately
+1,461 ms on its miss and 13 ms on a hit in a new Python process.
+The second process blocked HTTP client creation and credential loading,
+returned the same answer and cache key, and reported zero API usage.
+These are smoke observations, not latency benchmarks.
+
+No evaluation questions were sent to the LLM. Retrieval settings,
+datasets, indexes and historical results remain unchanged.
+
 ## Tests
 
 ```powershell
@@ -624,7 +715,12 @@ also cover timing boundaries, named-run protection, combined provenance,
 model loading before retrieval and CLI routing. Retrieval and runner tests
 use synthetic fixtures; a separate real-model synthetic smoke check verified
 scoring and overflow rejection.
-All 270 tests passed on Day 13.
+The 32 LLM tests use mocked HTTP responses and temporary cache directories.
+They cover complete-input preservation and limits, usage, timing,
+incomplete-output rejection, error handling, persistent reuse without
+credentials or HTTP, cache-key changes, historical-entry preservation
+and corrupt-entry rejection.
+All 302 tests passed on Day 15.
 
 Chunking tests require the cached pinned tokenizer. Embedding length checks
 also require the cached complete model. The corpus integration test requires
@@ -647,6 +743,7 @@ src/
   bm25.py                                       BM25 indexing, verified loading and search CLI
   hybrid.py                                    Reciprocal rank fusion and verified hybrid search
   rerank.py                                    Pinned cross-encoder scoring and reranked search
+  llm.py                                       Checked Gemini completions and persistent response cache
 
 tests/
   test_ingest.py                                Ingestion tests
@@ -659,6 +756,7 @@ tests/
   test_bm25.py                                  BM25 tokenization, indexing and retrieval tests
   test_hybrid.py                               Fusion and hybrid retrieval tests
   test_rerank.py                               Complete-pair scoring and reranking tests
+  test_llm.py                                  Mocked completion, token-limit and disk-cache tests
 
 eval/
   questions.jsonl                               Source-checked evaluation questions and labels
@@ -680,6 +778,8 @@ data/
   index/heading/                                Heading index, chunk mapping and manifest
   index/bm25/fixed/                             Fixed BM25 tokens, chunk mapping and manifest
   index/bm25/heading/                           Heading BM25 tokens, chunk mapping and manifest
+  cache/llm/                                   Ignored completion requests, responses and original usage
+.env.example                Tracked API-key placeholder; copy to private .env
 README.md                   Setup, usage and limitations
 NOTES.md                    Decisions, failures and daily progress
 ```
