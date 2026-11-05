@@ -447,3 +447,17 @@ These are local CPU observations from one run, not repeated latency benchmarks.
 - All 270 tests passed. A real-model synthetic smoke check verified scoring and rejection of oversized pairs before inference.
 - Source content, existing indexes and historical result files were preserved.
 - No retrieval parameters were tuned after inspecting these results. No held-out performance was evaluated.
+
+## Day 14 retrieval table and analysis
+
+- did: Confirmed the six matched Day 13 comparison rows on 36 answerable
+  DEV questions. Selected BM25 + heading with k=5 for Week 3 using the
+  plan's recall@5 and speed rule. Reviewed q026 against its gold sections,
+  saved retrieval results and complete indexed evidence. Recorded the
+  analysis in eval/retrieval_analysis.md and updated README.md.
+- broke: The selected configuration has only one miss@5, so ten misses
+  could not be reviewed. Classified q026 as vocabulary mismatch, with
+  the precise scoring cause unproven. No gold-label correction was needed.
+- next: Review the saved Day 14 changes, commit and push, then create and
+  push the v0.2 milestone tag. Day 15 begins LLM access and caching.
+  The last full test run remains Day 13: 270 passed.

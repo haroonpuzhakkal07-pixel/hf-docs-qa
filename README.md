@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 13:
+Implemented through Day 14:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -568,6 +568,35 @@ the pinned cross-encoder settings.
 
 The runners reject provenance changes during evaluation and preserve
 existing source files, indexes and result files.
+
+## Day 14 retrieval selection
+
+Carry **BM25 + heading**, with five retrieved chunks, into Week 3.
+
+The matched Day 13 runs give BM25 heading, hybrid heading and reranked
+heading the highest recall@5: 35/36 answerable DEV questions (97.22%).
+BM25 heading is fastest among those three: mean 40.58 ms/query, compared
+with 65.72 ms for hybrid and 1053.27 ms for reranked retrieval.
+Dense heading is faster at 24.96 ms but scores 34/36 at recall@5,
+2.78 percentage points below the maximum, outside the plan's two-point
+allowance. Selection follows the plan's recall@5 and speed rule.
+
+Hybrid and reranked retrieval retain advantages at rank 1 and MRR@10.
+This selection does not establish superior answer quality; generation
+and answer evaluation have not yet been implemented. Timings remain
+single-run local CPU observations.
+
+Reviewed the selected configuration's only miss@5, q026, also a miss@10.
+Both gold facts survive completely in the indexed passages, and the gold
+label remains valid. The closest failure category is vocabulary mismatch:
+retrieved passages match parts of the query without the required
+model-specific evidence. The precise scoring cause was not measured.
+See [the retrieval miss analysis](eval/retrieval_analysis.md).
+Only one miss exists, so the plan's requested ten-miss review was reduced
+to that one actual case.
+
+No dataset labels, retrieval settings, indexes or historical results were
+changed. Held-out TEST performance remains untouched.
 
 ## Tests
 
