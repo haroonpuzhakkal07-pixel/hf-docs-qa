@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 18:
+Implemented through Day 19:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -22,6 +22,7 @@ Implemented through Day 18:
 - All 304 tests passed on Day 16.
 - Saved closed-book and BM25 heading answers for the same 45 DEV questions and manually reviewed 10 responses.
 - Added correctness and faithfulness judging. The 10-answer DEV trial produced valid JSON on the first attempt for all 5 correctness calls and both faithfulness calls.
+- Validated Gemini 3.1 Flash-Lite as the default judge. Its correctness verdicts agreed with 18 of 20 assistant-assisted DEV reference grades (90%). A separate faithfulness spot check matched all 3 expected verdicts.
 
 Manual observations, failures and baseline results are recorded in NOTES.md.
 

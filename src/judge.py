@@ -36,7 +36,7 @@ def parse_faithfulness(text: str) -> dict:
     return verdict
 
 
-JUDGE_MODEL = "gemini-3.5-flash"
+JUDGE_MODEL = "gemini-3.1-flash-lite"
 JUDGE_INPUT_TOKEN_BUDGET = 4000
 
 CORRECTNESS_SYSTEM = (

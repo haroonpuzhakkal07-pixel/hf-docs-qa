@@ -548,3 +548,13 @@ invocations and excludes calls from earlier attempts.
 - Reviewed 10 saved DEV answers across q003, q026, q035, q049, and q054. All 5 correctness verdicts and both faithfulness verdicts passed JSON and schema validation on the first attempt. Preflight counts ranged from 134 to 1,934 tokens. Grounded q026 scored correctness 0 locally, and all four unanswerable trial rows passed their configuration's exact abstention check.
 - Both q035 answers received correctness 1 for explaining keyword forwarding and registration-key matching. Both omit the reference's explicit subclass and distinct model-type requirements. Carry this rubric ambiguity into Day 19 validation. The grounded q035 claims were supported by the supplied passages.
 - Focused adapter, generator, and judge suite passed 59 tests.
+
+## Day 19 judge validation
+
+- Saved 20 assistant-assisted correctness reference grades before viewing judge verdicts. The DEV sample included 10 closed-book and 10 BM25 heading answers, with 16 positive and 4 negative grades. It excluded the five Day 18 trial questions.
+- The original Flash judge hit the Free-tier daily request limit after 13 completed verdicts. Switched the candidate to `gemini-3.1-flash-lite`, which showed 500 requests/day in AI Studio, and ran all 20 cases with that model. Gemini reported the same model ID on every call. The original partial run was kept separate.
+- Correctness agreement was 18/20 (90%), above the 85% target. The judge matched all 16 positive and 2 of 4 negative reference grades. An always-positive judge would have matched 16/20.
+- Both disagreements were closed-book false positives against the reference grades. For q046, the judge accepted chunk size alone and missed the look-ahead component. For q031, it accepted naming TF32 without explaining the mantissa change.
+- The separate faithfulness spot check matched 3/3 expected verdicts. The judge accepted two supported saved DEV answers and flagged the unsupported throughput guarantee added to a synthetic variant.
+- Kept the rubrics as written and set `gemini-3.1-flash-lite` as the default judge. The focused adapter, generator, and judge suite passed all 59 tests.
+- Reference grades are in `eval/judge_validation.csv`. Correctness verdicts are in `eval/results/judge_validation/day19_flash_3_1_lite.jsonl`.

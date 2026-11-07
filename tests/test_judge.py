@@ -65,7 +65,7 @@ def test_parse_retry_uses_a_distinct_request(monkeypatch):
             "temperature": 0,
             "max_tokens": 500,
             "input_token_budget": 4000,
-            "model": "gemini-3.5-flash",
+            "model": "gemini-3.1-flash-lite",
             "json_output": True,
         }
         if key not in cache:

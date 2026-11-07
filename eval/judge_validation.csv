@@ -1,0 +1,21 @@
+config,id,reference_correct,reference_reason,grading_provenance
+bm25_heading,q009,1,Gives the required sampling rate of 16 kHz.,assistant-assisted
+bm25_heading,q043,1,"Explains the shift from 1-D numbering to a 2-D canvas with temporal, height, and width positions and describes what that preserves.",assistant-assisted
+closed_book,q038,1,"Explains why 4x is better for detail-rich tasks. It omits the explicit visual-token comparison and the 16x speed benefit, but it answers why you would choose 4x.",assistant-assisted
+closed_book,q029,1,Distinguishes activations from per-parameter Adam states and explains why training only adapters reduces optimizer-state memory.,assistant-assisted
+bm25_heading,q031,1,"Covers bf16 forward and backward compute, the retained fp32 weight copy, and TF32's separate matrix-multiplication behavior.",assistant-assisted
+closed_book,q010,1,"Gives the documented solution modules_to_save=[""lm_head""] in LoraConfig. The manual-unfreezing alternative is extra and leaves out how the head would be saved.",assistant-assisted
+bm25_heading,q010,1,"Specifies modules_to_save=[""lm_head""] in LoraConfig to train the head alongside the adapter.",assistant-assisted
+closed_book,q002,1,Gives the exact translation task prefix followed by the input text.,assistant-assisted
+bm25_heading,q007,1,Identifies both required file types and says they must be in the same directory.,assistant-assisted
+bm25_heading,q013,1,Identifies the longest sequence in the current batch as the padding target.,assistant-assisted
+closed_book,q006,0,"Incorrectly says bf16 and fp16 have the same exponent range, contradicting the central gold fact.",assistant-assisted
+bm25_heading,q006,1,Identifies bf16's fp32 exponent range and explains that it makes overflow less likely.,assistant-assisted
+bm25_heading,q030,1,"Gives both requested settings, mode=""max"" and early_stopping_patience=3. It omits the evaluation strategy and metric selection, which I treated as setup details outside the two settings explicitly asked for.",assistant-assisted
+closed_book,q042,0,Mentions linear scaling but omits the defining detail that rope_theta is the base scaled by the NTK factor. It also suggests dynamic scaling as an alternative.,assistant-assisted
+closed_book,q046,0,"Correctly excludes computation time but misidentifies the latency as the chunk size alone. It measures the audio that must arrive before processing, including look-ahead.",assistant-assisted
+closed_book,q022,1,Identifies the original uncorrupted text as the reconstruction target.,assistant-assisted
+bm25_heading,q037,1,States that no token-type embedding is created and token_type_ids are ignored.,assistant-assisted
+closed_book,q013,1,Identifies the longest sequence in the current batch as the padding target.,assistant-assisted
+closed_book,q031,0,"Gives the bf16 compute and FP32 weight-copy behavior, but only names TF32 for matrix multiplication. It omits the 10-bit versus 23-bit mantissa change that explains what TF32 changes.",assistant-assisted
+bm25_heading,q042,1,Identifies the linear RopeParameters entry and explains that rope_theta is the base scaled by the NTK factor.,assistant-assisted
