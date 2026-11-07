@@ -1,10 +1,11 @@
+import hashlib
 import json
 from collections import deque
 
 import httpx
 import pytest
 
-from src import llm
+from src import judge, llm
 
 
 @pytest.fixture
@@ -200,6 +201,62 @@ def queue_success(responses):
         (200, {"totalTokens": 30}),
         (200, successful_response()),
     ])
+
+
+def test_day17_text_cache_is_reused(api, monkeypatch, tmp_path):
+    calls, responses = api
+    old_source = tmp_path / "day17_llm.py"
+    old_source.write_bytes(b"synthetic Day 17 implementation")
+    old_hash = hashlib.sha256(old_source.read_bytes()).hexdigest()
+    with monkeypatch.context() as old:
+        old.setattr(llm, "__file__", str(old_source))
+        queue_success(responses)
+        original = llm.complete("System", "Prompt")
+
+    monkeypatch.setattr(llm, "DAY17_IMPLEMENTATION_SHA256", old_hash)
+    path = tmp_path / "data" / "cache" / "llm" / f"{original['cache_key']}.json"
+    original_bytes = path.read_bytes()
+    hit = llm.complete("System", "Prompt")
+
+    assert hit["cache_hit"] is True
+    assert hit["cache_key"] == original["cache_key"]
+    assert path.read_bytes() == original_bytes
+    assert len(calls) == 2
+
+
+def test_judge_json_retry_bypasses_cached_malformed_reply(api):
+    calls, responses = api
+    prompt = json.dumps({
+        "question": "Question?", "gold_answer": "Gold", "model_answer": "Answer",
+    })
+    queue_success(responses)
+    malformed = llm.complete(
+        judge.CORRECTNESS_SYSTEM, prompt,
+        model=judge.JUDGE_MODEL, json_output=True,
+    )
+    valid = successful_response()
+    valid["candidates"][0]["content"]["parts"] = [
+        {"text": '{"correct": 0, "reason": "Omits the gold fact."}'},
+    ]
+    responses.extend([(200, {"totalTokens": 30}), (200, valid)])
+
+    assert judge.judge_correctness("Question?", "Gold", "Answer") == {
+        "correct": 0, "reason": "Omits the gold fact.",
+    }
+    assert len(calls) == 4
+    assert llm.complete(
+        judge.CORRECTNESS_SYSTEM, prompt,
+        model=judge.JUDGE_MODEL, json_output=True,
+    )["cache_key"] == malformed["cache_key"]
+    assert len(calls) == 4
+    for preflight, generation in (calls[:2], calls[2:]):
+        endpoint = f"/models/{judge.JUDGE_MODEL}"
+        assert preflight["url"].endswith(f"{endpoint}:countTokens")
+        assert generation["url"].endswith(f"{endpoint}:generateContent")
+        assert preflight["body"]["generateContentRequest"] == {
+            "model": f"models/{judge.JUDGE_MODEL}", **generation["body"],
+        }
+        assert generation["body"]["generationConfig"]["responseMimeType"] == "application/json"
 
 
 def test_cache_hit_works_without_credentials_or_http(api, monkeypatch):

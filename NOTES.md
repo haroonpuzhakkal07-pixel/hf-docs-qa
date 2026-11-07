@@ -539,3 +539,12 @@ invocations and excludes calls from earlier attempts.
 | q035 | Both covered forwarding extra keyword arguments and matching the registration key. Both omitted the explicit subclass and distinct model-type requirements from the reference. The grounded answer used individual and grouped citations. |
 | q049 | BM25 heading returned the exact refusal. Closed-book said it did not know. |
 | q054 | BM25 heading returned the exact refusal. Closed-book said it did not know. |
+
+## Day 18 answer judges and DEV trial
+
+- Added binary correctness with a short reason and binary faithfulness with a list of unsupported claims. Faithfulness uses the complete numbered BM25 heading passages reconstructed from saved retrieval IDs in rank order.
+- Score exact abstentions locally. An answerable abstention gets correctness 0. For unanswerable questions, the gold answer is empty, so correctness is inapplicable and abstention is scored separately. Faithfulness is inapplicable for closed-book answers and skipped for exact grounded refusals.
+- Requested `gemini-3.5-flash` on the billing-disabled Free-tier project. Gemini reported `gemini-3.6-flash` on every trial call. Used temperature 0, JSON mode, and a 4,000-token complete-input budget checked by the requested model. The single parse retry uses a distinct cache key. Verified that a malformed cached reply can trigger a fresh retry and that the Day 17 closed-book q003 completion remains reusable.
+- Reviewed 10 saved DEV answers across q003, q026, q035, q049, and q054. All 5 correctness verdicts and both faithfulness verdicts passed JSON and schema validation on the first attempt. Preflight counts ranged from 134 to 1,934 tokens. Grounded q026 scored correctness 0 locally, and all four unanswerable trial rows passed their configuration's exact abstention check.
+- Both q035 answers received correctness 1 for explaining keyword forwarding and registration-key matching. Both omit the reference's explicit subclass and distinct model-type requirements. Carry this rubric ambiguity into Day 19 validation. The grounded q035 claims were supported by the supplied passages.
+- Focused adapter, generator, and judge suite passed 59 tests.

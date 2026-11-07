@@ -19,11 +19,11 @@ API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 THINKING_LEVEL = "MINIMAL"
 
 
-def _post(client, method, payload):
+def _post(client, method, payload, *, model):
     """Return a JSON object without exposing credentials in errors."""
     try:
         response = client.post(
-            f"{API_ROOT}/models/{MODEL}:{method}",
+            f"{API_ROOT}/models/{model}:{method}",
             json=payload,
         )
     except httpx.RequestError:
@@ -80,7 +80,9 @@ def _check_input_limit(tokens, limit):
         )
 
 
-def _complete_uncached(system, prompt, temperature, max_tokens, *, input_limit):
+def _complete_uncached(
+    system, prompt, temperature, max_tokens, *, input_limit, model, json_output
+):
     """Return a complete text response, usage and elapsed milliseconds.
 
     Reads the key specifically from the repository .env file.
@@ -105,6 +107,9 @@ def _complete_uncached(system, prompt, temperature, max_tokens, *, input_limit):
         },
     }
 
+    if json_output:
+        payload["generationConfig"]["responseMimeType"] = "application/json"
+
     started = perf_counter()
     with httpx.Client(
         headers={"x-goog-api-key": key},
@@ -116,16 +121,17 @@ def _complete_uncached(system, prompt, temperature, max_tokens, *, input_limit):
             "countTokens",
             {
                 "generateContentRequest": {
-                    "model": f"models/{MODEL}",
+                    "model": f"models/{model}",
                     **payload,
                 }
             },
+            model=model,
         )
         input_tokens = _token_count(counted, "totalTokens")
         _check_input_limit(input_tokens, input_limit)
 
         generation_started = perf_counter()
-        data = _post(client, "generateContent", payload)
+        data = _post(client, "generateContent", payload, model=model)
         generation_ms = (perf_counter() - generation_started) * 1000
 
     candidates = data.get("candidates", [])
@@ -166,7 +172,7 @@ def _complete_uncached(system, prompt, temperature, max_tokens, *, input_limit):
 
     return {
         "text": text,
-        "model": MODEL,
+        "model": model,
         "model_version": model_version,
         "tokens_in": _token_count(usage, "promptTokenCount"),
         "tokens_out": _token_count(usage, "candidatesTokenCount"),
@@ -181,13 +187,16 @@ def _complete_uncached(system, prompt, temperature, max_tokens, *, input_limit):
     }
 
 CACHE_SCHEMA_VERSION = 1
+DAY17_IMPLEMENTATION_SHA256 = (
+    "ee68aa92c73c1080ab023c05c237c5cca0569e6660e610fcd643fe1dda91b171"
+)
 
 
-def _validate_cached_result(result):
+def _validate_cached_result(result, *, model):
     """Reject incomplete or malformed cache entries."""
     if not isinstance(result, dict):
         raise RuntimeError("Invalid cached completion.")
-    if result.get("model") != MODEL or result.get("finish_reason") != "STOP":
+    if result.get("model") != model or result.get("finish_reason") != "STOP":
         raise RuntimeError("Incompatible cached completion.")
     for name in ("text", "model_version"):
         value = result.get(name)
@@ -208,7 +217,19 @@ def _validate_cached_result(result):
             raise RuntimeError(f"Invalid cached timing: {name}")
 
 
-def complete(system, prompt, temperature=0, max_tokens=500, *, input_token_budget=None):
+def _cache_path(request):
+    encoded = json.dumps(
+        request, ensure_ascii=False, sort_keys=True,
+        separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")
+    key = hashlib.sha256(encoded).hexdigest()
+    return REPO_ROOT / "data" / "cache" / "llm" / f"{key}.json"
+
+
+def complete(
+    system, prompt, temperature=0, max_tokens=500, *,
+    input_token_budget=None, model=None, json_output=False,
+):
     """Return a completion, reusing a successful saved response when present.
 
     Top-level token counts describe the original response.
@@ -217,7 +238,9 @@ def complete(system, prompt, temperature=0, max_tokens=500, *, input_token_budge
     Original response timings are retained separately.
 
     input_token_budget caps the complete input, including on cache hits.
+    model defaults to the generator model. json_output requests JSON mode.
     """
+    model = MODEL if model is None else model
     _validate_inputs(system, prompt, temperature, max_tokens)
     input_limit = INPUT_TOKEN_LIMIT
     if input_token_budget is not None:
@@ -237,7 +260,7 @@ def complete(system, prompt, temperature=0, max_tokens=500, *, input_token_budge
             Path(__file__).read_bytes()
         ).hexdigest(),
         "api_root": API_ROOT,
-        "model": MODEL,
+        "model": model,
         "system": system,
         "prompt": prompt,
         "temperature": float(temperature),
@@ -247,19 +270,28 @@ def complete(system, prompt, temperature=0, max_tokens=500, *, input_token_budge
         "input_token_limit": INPUT_TOKEN_LIMIT,
         "output_token_limit": OUTPUT_TOKEN_LIMIT,
     }
-    encoded = json.dumps(
-        request, ensure_ascii=False, sort_keys=True,
-        separators=(",", ":"), allow_nan=False,
-    ).encode("utf-8")
-    cache_key = hashlib.sha256(encoded).hexdigest()
-    cache_path = REPO_ROOT / "data" / "cache" / "llm" / f"{cache_key}.json"
+    if json_output:
+        request["response_mime_type"] = "application/json"
 
-    try:
-        saved_text = cache_path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        cache_hit = False
-    else:
+    cache_path = _cache_path(request)
+    candidates = [request]
+    if model == "gemini-3.5-flash-lite" and not json_output:
+        # Day 17 used the same payload and response checks for text requests.
+        candidates.append({**request, "implementation_sha256": DAY17_IMPLEMENTATION_SHA256})
+
+    for candidate in candidates:
+        path = _cache_path(candidate)
+        try:
+            saved_text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+        cache_path, request = path, candidate
         cache_hit = True
+        break
+    else:
+        cache_hit = False
+
+    if cache_hit:
         try:
             saved = json.loads(saved_text)
         except ValueError:
@@ -275,14 +307,15 @@ def complete(system, prompt, temperature=0, max_tokens=500, *, input_token_budge
                 f"Incompatible cache entry: {cache_path.name}; entry preserved."
             )
         result = saved.get("result")
-        _validate_cached_result(result)
+        _validate_cached_result(result, model=model)
         _check_input_limit(result["preflight_tokens"], input_limit)
 
     if not cache_hit:
         result = _complete_uncached(
-            system, prompt, temperature, max_tokens, input_limit=input_limit
+            system, prompt, temperature, max_tokens,
+            input_limit=input_limit, model=model, json_output=json_output,
         )
-        _validate_cached_result(result)
+        _validate_cached_result(result, model=model)
         saved = {
             "schema_version": CACHE_SCHEMA_VERSION,
             "request": request,
@@ -299,7 +332,7 @@ def complete(system, prompt, temperature=0, max_tokens=500, *, input_token_budge
     return {
         **result,
         "cache_hit": cache_hit,
-        "cache_key": cache_key,
+        "cache_key": cache_path.stem,
         "original_latency_ms": result["latency_ms"],
         "original_generation_ms": result["generation_ms"],
         "generation_ms": 0.0 if cache_hit else result["generation_ms"],

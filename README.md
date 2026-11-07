@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 17:
+Implemented through Day 18:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -21,9 +21,9 @@ Implemented through Day 17:
 - Added the grounded answer prompt and verified citations and refusals on six manual DEV questions.
 - All 304 tests passed on Day 16.
 - Saved closed-book and BM25 heading answers for the same 45 DEV questions and manually reviewed 10 responses.
+- Added correctness and faithfulness judging. The 10-answer DEV trial produced valid JSON on the first attempt for all 5 correctness calls and both faithfulness calls.
 
 Manual observations, failures and baseline results are recorded in NOTES.md.
-Formal answer judging begins on Day 18.
 
 ## Corpus
 
