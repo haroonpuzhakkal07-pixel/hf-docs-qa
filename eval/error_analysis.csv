@@ -1,0 +1,7 @@
+id,split,config,question_type,category,evidence
+q025,dev,hybrid_heading,multi_step,retrieval miss,"The accumulation passage supports batch size 2 and 8 accumulation steps. The checkpointing link does not supply the setting or recomputation slowdown."
+q026,dev,hybrid_heading,multi_step,retrieval miss,"The saved passages discuss positional embeddings and padding generally but omit the BART and T5 padding rules."
+q027,dev,hybrid_heading,multi_step,wrong refusal,"peft.md chunks 00006 and 00007 explain that ZeRO-3 skips frozen base weights when saving and that from_pretrained reads base_model_name_or_path from adapter_config.json."
+q029,dev,hybrid_heading,multi_step,retrieval miss,"The saved passages cover Adam states and activation recomputation but omit how adapter-only PEFT reduces the parameters tracked by the optimizer."
+q033,dev,hybrid_heading,multi_step,retrieval miss,"The masked-LM passage gives mlm_probability=0.15. The causal-LM introduction omits the collator recipe with mlm=False."
+q034,dev,hybrid_heading,multi_step,retrieval miss,"The saved passages identify DataCollatorWithPadding but omit the image-classification passage explaining that DefaultDataCollator does no padding."

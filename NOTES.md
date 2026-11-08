@@ -611,3 +611,18 @@ invocations and excludes calls from earlier attempts.
    heading and hybrid heading each abstained on 6/36 and earned
    30/30 faithfulness. The faithfulness judge graded only grounded
    non-refusals. Closed-book had no faithfulness score.
+
+## Day 22 DEV error analysis
+
+Reviewed all six answerable DEV errors from `hybrid_heading`, which tied
+`bm25_heading` for best overall correctness at 30/36. All six errors
+were multi-step abstentions. The per-question evidence is in
+[the error analysis CSV](eval/error_analysis.csv).
+
+- Retrieval miss: 5/6. The saved top five lacked evidence needed for
+  at least one part of the answer.
+- Wrong refusal: 1/6. For q027, the saved context supported a qualified
+  answer using the ZeRO-3 checkpoint and adapter-loading passages.
+
+Retrieval misses were the largest category. Day 23 will focus on
+improving retrieval coverage for multi-step questions.
