@@ -626,3 +626,22 @@ were multi-step abstentions. The per-question evidence is in
 
 Retrieval misses were the largest category. Day 23 will focus on
 improving retrieval coverage for multi-step questions.
+
+## Day 23 DEV retrieval depth experiment
+
+Compared the first five and first eight passages from the saved
+`hybrid_heading` DEV rankings. The first five chunk IDs matched the
+Day 20 answers in order for all 36 answerable DEV questions.
+
+- Any gold page in the retrieved set: 35/36 at both depths overall
+  and 8/9 at both depths on multi-step.
+- All gold pages in the retrieved set: 32/36 to 34/36 overall and
+  5/9 to 7/9 on multi-step.
+- Manual review of the five Day 22 retrieval misses found that the
+  added passages supplied the missing evidence for 3/5: gradient
+  checkpointing for q025, adapter optimizer states for q029, and
+  `mlm=False` for q033. The gaps for q026 and q034 remained.
+
+This was a retrieval-only comparison on saved DEV rankings. It did
+not measure answer correctness, refusal rates, or whether eight
+passages fit the generation input budget.
