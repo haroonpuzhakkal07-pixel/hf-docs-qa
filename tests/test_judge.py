@@ -84,6 +84,26 @@ def test_parse_retry_uses_a_distinct_request(monkeypatch):
     assert cache[first] == malformed
 
 
+def test_attempt_callback_observes_malformed_reply_and_retry(monkeypatch):
+    first = {"text": "invalid JSON", "cache_hit": True}
+    retry = {
+        "text": '{"correct": 1, "reason": "Matches the reference."}',
+        "cache_hit": False,
+    }
+    replies = iter((first, retry))
+    monkeypatch.setattr(
+        judge.llm, "complete", lambda *args, **kwargs: next(replies)
+    )
+    attempts = []
+
+    verdict = judge.judge_correctness(
+        "Question?", "Gold answer", "Model answer", on_attempt=attempts.append,
+    )
+
+    assert verdict["correct"] == 1
+    assert attempts == [first, retry]
+
+
 def test_second_invalid_reply_raises_without_another_retry(monkeypatch):
     calls = []
 

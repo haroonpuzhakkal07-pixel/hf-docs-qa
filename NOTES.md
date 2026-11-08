@@ -558,3 +558,17 @@ invocations and excludes calls from earlier attempts.
 - The separate faithfulness spot check matched 3/3 expected verdicts. The judge accepted two supported saved DEV answers and flagged the unsupported throughput guarantee added to a synthetic variant.
 - Kept the rubrics as written and set `gemini-3.1-flash-lite` as the default judge. The focused adapter, generator, and judge suite passed all 59 tests.
 - Reference grades are in `eval/judge_validation.csv`. Correctness verdicts are in `eval/results/judge_validation/day19_flash_3_1_lite.jsonl`.
+
+## Day 20 DEV comparison
+
+- Reused 90 verified saved answers and generated the remaining 180 answer
+  rows. Saved 270 DEV score rows across the six configurations.
+- Verified saved retrieval IDs against each configuration's chunk mapping.
+  Faithfulness used the complete passages in saved retrieval order.
+- Resumed interrupted runs through the completion cache. The final files'
+  fresh API usage covers successful completions in the saving invocation.
+  Saved latency includes cache lookup time where applicable.
+- Published the overall and per-type tables in `eval/results/summary.md`
+  and the 30-row `eval/results/summary.csv`. Generation cost per query was
+  $0 on the billing-disabled Free tier. The held-out TEST questions were
+  excluded from retrieval, generation, judging, and performance inspection.

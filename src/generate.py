@@ -6,6 +6,9 @@ from time import perf_counter
 from src.bm25 import bm25_search
 from src.llm import complete
 from src.prompting import SYSTEM_PROMPT, build_prompt
+from src.hybrid import hybrid_search
+from src.rerank import reranked_search
+from src.retrieve import dense_search
 
 
 INPUT_TOKEN_BUDGET = 3000
@@ -31,23 +34,32 @@ def _cited_chunk_ids(text: str, passage_chunk_ids: list[str]) -> list[str]:
 
 
 def answer(question: str, config: str) -> dict:
-    """Generate one answer using BM25 passages or the closed-book baseline."""
+    """Generate an answer using the selected retrieval configuration."""
     if not isinstance(question, str) or not question.strip():
         raise ValueError("question must be a nonempty string")
 
-    if config == "bm25_heading":
-        started = perf_counter()
-        chunks = bm25_search(question, index_name="heading", k=5)
-        retrieval_ms = (perf_counter() - started) * 1000
-        system = SYSTEM_PROMPT
-        prompt = build_prompt(question, chunks)
-    elif config == "closed_book":
+    if config == "closed_book":
         chunks = []
         retrieval_ms = 0.0
         system = CLOSED_BOOK_SYSTEM_PROMPT
         prompt = question
     else:
-        raise ValueError(f"unknown answer config: {config!r}")
+        retrievers = {
+            "dense_fixed": (dense_search, "fixed"),
+            "dense_heading": (dense_search, "heading"),
+            "bm25_heading": (bm25_search, "heading"),
+            "hybrid_heading": (hybrid_search, "heading"),
+            "hybrid_rerank_heading": (reranked_search, "heading"),
+        }
+        if config not in retrievers:
+            raise ValueError(f"unknown answer config: {config!r}")
+
+        search, index_name = retrievers[config]
+        started = perf_counter()
+        chunks = search(question, index_name=index_name, k=5)
+        retrieval_ms = (perf_counter() - started) * 1000
+        system = SYSTEM_PROMPT
+        prompt = build_prompt(question, chunks)
 
     retrieved_ids = [chunk["chunk_id"] for chunk in chunks]
     result = complete(
@@ -64,6 +76,9 @@ def answer(question: str, config: str) -> dict:
         "retrieved_chunk_ids": retrieved_ids,
         "retrieval_ms": retrieval_ms,
         "llm_ms": result["latency_ms"],
+        "original_llm_ms": result["original_latency_ms"],
+        "requested_model": result["model"],
+        "cache_key": result["cache_key"],
         "token_usage": {
             name: result[name]
             for name in ("tokens_in", "tokens_out", "thinking_tokens", "total_tokens")

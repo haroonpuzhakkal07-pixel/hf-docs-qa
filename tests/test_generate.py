@@ -17,8 +17,20 @@ from src.prompting import REFUSAL, SYSTEM_PROMPT, build_prompt
 def test_cited_chunk_ids(text, passage_chunk_ids, expected):
     assert _cited_chunk_ids(text, passage_chunk_ids) == expected
 
-@pytest.mark.parametrize("config", ["bm25_heading", "closed_book"])
-def test_answer_config_wires_retrieval_prompt_and_usage(monkeypatch, config):
+@pytest.mark.parametrize(
+    ("config", "search_name", "index_name"),
+    [
+        ("closed_book", None, None),
+        ("dense_fixed", "dense_search", "fixed"),
+        ("dense_heading", "dense_search", "heading"),
+        ("bm25_heading", "bm25_search", "heading"),
+        ("hybrid_heading", "hybrid_search", "heading"),
+        ("hybrid_rerank_heading", "reranked_search", "heading"),
+    ],
+)
+def test_answer_config_wires_retrieval_prompt_and_usage(
+    monkeypatch, config, search_name, index_name
+):
     question = "How do I configure this?"
     chunks = [
         {"chunk_id": "a", "path": "a.md", "heading_path": "A", "text": "First passage."},
@@ -38,7 +50,7 @@ def test_answer_config_wires_retrieval_prompt_and_usage(monkeypatch, config):
         return chunks
 
     def fake_complete(system, prompt, *, temperature, max_tokens, input_token_budget):
-        if config == "bm25_heading":
+        if search_name is not None:
             assert system == SYSTEM_PROMPT
             assert prompt == build_prompt(question, chunks)
         else:
@@ -49,19 +61,28 @@ def test_answer_config_wires_retrieval_prompt_and_usage(monkeypatch, config):
             **usage,
             "text": "Use the configuration in [2, 1].",
             "latency_ms": 4.0,
+            "original_latency_ms": 1250.0,
+            "model": "requested-model",
+            "cache_key": "test-cache-key",
             "api_usage": api_usage,
             "preflight_tokens": 101,
             "cache_hit": True,
             "model_version": "test-model",
         }
 
-    monkeypatch.setattr(generate, "bm25_search", fake_search)
+    def unexpected_search(*args, **kwargs):
+        pytest.fail("Called an unexpected retriever")
+
+    for name in ("dense_search", "bm25_search", "hybrid_search", "reranked_search"):
+        monkeypatch.setattr(
+            generate, name, fake_search if name == search_name else unexpected_search
+        )
     monkeypatch.setattr(generate, "complete", fake_complete)
 
     result = generate.answer(question, config)
 
-    if config == "bm25_heading":
-        assert retrieval_calls == [(question, "heading", 5)]
+    if search_name is not None:
+        assert retrieval_calls == [(question, index_name, 5)]
         assert result["retrieved_chunk_ids"] == ["a", "b"]
         assert result["cited_chunk_ids"] == ["b", "a"]
         assert result["retrieval_ms"] >= 0.0
@@ -73,6 +94,9 @@ def test_answer_config_wires_retrieval_prompt_and_usage(monkeypatch, config):
 
     assert result["answer"] == "Use the configuration in [2, 1]."
     assert result["llm_ms"] == 4.0
+    assert result["original_llm_ms"] == 1250.0
+    assert result["requested_model"] == "requested-model"
+    assert result["cache_key"] == "test-cache-key"
     assert result["token_usage"] == usage
     assert result["api_usage"] == api_usage
     assert result["preflight_tokens"] == 101

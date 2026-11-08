@@ -64,7 +64,7 @@ RETRY_INSTRUCTION = (
 )
 
 
-def _judge(system, prompt, parse):
+def _judge(system, prompt, parse, *, on_attempt=None):
     options = {
         "temperature": 0,
         "max_tokens": 500,
@@ -72,17 +72,25 @@ def _judge(system, prompt, parse):
         "model": JUDGE_MODEL,
         "json_output": True,
     }
-    first = llm.complete(system, prompt, **options)
+    def complete_attempt(instruction):
+        result = llm.complete(instruction, prompt, **options)
+        if on_attempt is not None:
+            on_attempt(result)
+        return result
+
+    first = complete_attempt(system)
     try:
         return parse(first["text"])
     except ValueError:
         pass
 
-    retry = llm.complete(system + RETRY_INSTRUCTION, prompt, **options)
+    retry = complete_attempt(system + RETRY_INSTRUCTION)
     return parse(retry["text"])
 
 
-def judge_correctness(question: str, gold_answer: str, model_answer: str) -> dict:
+def judge_correctness(
+    question: str, gold_answer: str, model_answer: str, *, on_attempt=None,
+) -> dict:
     prompt = json.dumps(
         {
             "question": question,
@@ -91,10 +99,14 @@ def judge_correctness(question: str, gold_answer: str, model_answer: str) -> dic
         },
         ensure_ascii=False,
     )
-    return _judge(CORRECTNESS_SYSTEM, prompt, parse_correctness)
+    return _judge(
+        CORRECTNESS_SYSTEM, prompt, parse_correctness, on_attempt=on_attempt,
+    )
 
 
-def judge_faithfulness(question: str, chunks: list[dict], model_answer: str) -> dict:
+def judge_faithfulness(
+    question: str, chunks: list[dict], model_answer: str, *, on_attempt=None,
+) -> dict:
     prompt = json.dumps(
         {
             "question_and_passages": build_prompt(question, chunks),
@@ -102,4 +114,6 @@ def judge_faithfulness(question: str, chunks: list[dict], model_answer: str) -> 
         },
         ensure_ascii=False,
     )
-    return _judge(FAITHFULNESS_SYSTEM, prompt, parse_faithfulness)
+    return _judge(
+        FAITHFULNESS_SYSTEM, prompt, parse_faithfulness, on_attempt=on_attempt,
+    )

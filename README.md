@@ -4,7 +4,7 @@ A question-answering project over Hugging Face Transformers documentation, with 
 
 ## Current status
 
-Implemented through Day 19:
+Implemented through Day 20:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -23,6 +23,7 @@ Implemented through Day 19:
 - Saved closed-book and BM25 heading answers for the same 45 DEV questions and manually reviewed 10 responses.
 - Added correctness and faithfulness judging. The 10-answer DEV trial produced valid JSON on the first attempt for all 5 correctness calls and both faithfulness calls.
 - Validated Gemini 3.1 Flash-Lite as the default judge. Its correctness verdicts agreed with 18 of 20 assistant-assisted DEV reference grades (90%). A separate faithfulness spot check matched all 3 expected verdicts.
+- Compared all six answer configurations on the same 45 DEV questions. The overall and per-question-type results are in [the Day 20 report](eval/results/summary.md).
 
 Manual observations, failures and baseline results are recorded in NOTES.md.
 
@@ -713,13 +714,14 @@ See NOTES.md for the individual observations.
 
 ## DEV answer generation
 
-`answer(question, config)` supports `closed_book` and `bm25_heading`.
-Closed-book sends the question alone and permits the model to say it does
-not know. BM25 heading supplies up to five complete ranked passages. It
-uses each citation number to look up the corresponding passage and
-returns cited chunk IDs in first-citation order. Both configurations use
-the same Gemini adapter, temperature 0, a 500-token output cap and a
-3,000-token complete-input budget.
+`answer(question, config)` supports `closed_book`, `dense_fixed`,
+`dense_heading`, `bm25_heading`, `hybrid_heading`, and
+`hybrid_rerank_heading`. Closed-book sends the question alone. Each
+grounded configuration supplies up to five complete passages in ranked
+order. Citation numbers map to those passages and are returned as chunk
+IDs in first-citation order. All configurations use the same Gemini
+generator, temperature 0, a 500-token output cap, and a 3,000-token
+complete-input budget.
 
 From the repository root, run each configuration separately.
 
@@ -738,6 +740,19 @@ Each row includes the answer, retrieved and cited chunk IDs, retrieval
 and LLM timing in milliseconds, the preflight token count, original
 response token usage and current-call API response token usage. Cache hits
 retain original response usage and report zero current API usage.
+
+## Day 20 DEV comparison
+
+The comparison uses 45 DEV questions per configuration, including 36
+answerable and 9 unanswerable questions. See the [overall and per-type
+tables](eval/results/summary.md) and [summary CSV](eval/results/summary.csv)
+for counts, denominators, and the timing and cost methodology.
+
+BM25 heading and hybrid heading each scored 30/36 on correctness and
+35/36 on page-level recall@5. Closed-book scored 28/36 on correctness.
+All six configurations used the expected exact abstention on all nine
+unanswerable questions. Faithfulness covers grounded non-refusals and
+uses the Day 19 judge.
 
 ## Tests
 

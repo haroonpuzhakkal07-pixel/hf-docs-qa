@@ -7,12 +7,22 @@ from time import sleep
 
 from eval.check_questions import check_questions
 from src.config import REPO_ROOT
+from src.evaluate import collect_combined_provenance, collect_provenance
 from src.generate import answer
+
+
+GROUNDING_INDEXES = {
+    "dense_fixed": ("fixed", "dense"),
+    "dense_heading": ("heading", "dense"),
+    "bm25_heading": ("heading", "bm25"),
+    "hybrid_heading": ("heading", "hybrid"),
+    "hybrid_rerank_heading": ("heading", "reranked"),
+}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config", choices=("closed_book", "bm25_heading"))
+    parser.add_argument("config", choices=("closed_book", *GROUNDING_INDEXES))
     args = parser.parse_args()
 
     eval_dir = REPO_ROOT / "eval"
@@ -20,11 +30,34 @@ def main() -> None:
     if output.exists():
         raise SystemExit(f"Result already exists: {output}")
 
-    records = check_questions(eval_dir / "questions.jsonl")
+    questions_path = eval_dir / "questions.jsonl"
+    records = check_questions(questions_path)
     dev = [record for record in records if record["split"] == "dev"]
     counts = Counter(record["answerable"] for record in dev)
     if counts != {True: 36, False: 9}:
         raise SystemExit(f"Unexpected DEV counts: {dict(counts)}")
+
+    index_provenance = {}
+    if args.config in GROUNDING_INDEXES:
+        index_name, retriever = GROUNDING_INDEXES[args.config]
+        if retriever in ("hybrid", "reranked"):
+            snapshot = collect_combined_provenance(
+                index_name, questions_path, retriever=retriever,
+            )
+            indexes = snapshot["indexes"].values()
+        else:
+            snapshot = collect_provenance(
+                index_name, questions_path, retriever=retriever,
+            )
+            indexes = (snapshot["index"],)
+
+        index_provenance = {
+            index["path"]: {
+                "manifest_sha256": index["manifest_sha256"],
+                "chunks_sha256": index["artifact_sha256"]["chunks.jsonl"],
+            }
+            for index in indexes
+        }
 
     rows = []
     for position, record in enumerate(dev, start=1):
@@ -40,6 +73,7 @@ def main() -> None:
             "split": record["split"],
             "answerable": record["answerable"],
             "config": args.config,
+            "index_provenance": index_provenance,
             **result,
         })
         source = "cache" if result["cache_hit"] else "fresh"
