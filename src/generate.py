@@ -18,6 +18,9 @@ CLOSED_BOOK_SYSTEM_PROMPT = (
     "If you are unsure, say you don't know."
 )
 
+class CompletionUnavailable(RuntimeError):
+    """The answer pipeline could not obtain a completion."""
+
 def _cited_chunk_ids(text: str, passage_chunk_ids: list[str]) -> list[str]:
     """Map numeric citations to chunk IDs in first-citation order."""
     chunk_by_number = {
@@ -62,13 +65,16 @@ def answer(question: str, config: str) -> dict:
         prompt = build_prompt(question, chunks)
 
     retrieved_ids = [chunk["chunk_id"] for chunk in chunks]
-    result = complete(
-        system,
-        prompt,
-        temperature=0,
-        max_tokens=500,
-        input_token_budget=INPUT_TOKEN_BUDGET,
-    )
+    try:
+        result = complete(
+            system,
+            prompt,
+            temperature=0,
+            max_tokens=500,
+            input_token_budget=INPUT_TOKEN_BUDGET,
+        )
+    except RuntimeError as exc:
+        raise CompletionUnavailable(str(exc)) from exc
     text = result["text"]
     return {
         "answer": text,
