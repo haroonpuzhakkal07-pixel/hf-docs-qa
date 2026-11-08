@@ -572,3 +572,42 @@ invocations and excludes calls from earlier attempts.
   and the 30-row `eval/results/summary.csv`. Generation cost per query was
   $0 on the billing-disabled Free tier. The held-out TEST questions were
   excluded from retrieval, generation, judging, and performance inspection.
+
+## Day 21 DEV observations
+
+1. **BM25 heading and hybrid heading tied across all three answerable
+   question types.** Each scored 30/36 on correctness, with 18/18 on
+   lookup, 3/9 on multi-step, and 9/9 on new-or-changed questions.
+   Each also reached 35/36 page-level recall@5, which counts a hit
+   when at least one gold source page appears among the top five passages.
+
+2. **The reranker showed no gain on the measured DEV quality metrics.**
+   Compared with hybrid heading, page-level recall@5 stayed at 35/36
+   and correctness fell from 30/36 to 29/36. The entire net drop came
+   from lookup, where correctness went from 18/18 to 17/18 and
+   over-refusal went from 0/18 to 1/18. Observed median run time rose
+   from 1.75 s to 3.17 s. Saved timings combine fresh requests and
+   cache lookups, so this difference describes the recorded runs.
+
+3. **Closed-book did well on lookup and multi-step.** The judge marked
+   16/18 lookup answers and 8/9 multi-step answers correct, with zero
+   over-refusals in both groups. Closed-book scored 4/9 on new-or-changed
+   questions, compared with 9/9 for BM25 heading and hybrid heading.
+   The Day 19 correctness judge agreed with 18/20 reference grades,
+   and both disagreements were closed-book false positives. Treat
+   the closed-book counts as judge scores.
+
+4. **Surprise: strong multi-step page recall coexisted with frequent
+   abstention.** BM25 heading, hybrid heading, and hybrid reranking
+   each reached 8/9 page-level recall@5 on multi-step, yet each
+   answered only 3/9 correctly and abstained on 6/9.
+   **Hypothesis:** The top five often included a passage from one
+   gold page but lacked enough evidence to support every step.
+
+5. **Perfect faithfulness scores covered different numbers of answers.**
+   All six configurations used the expected exact abstention on 9/9
+   unanswerable questions. Among the 36 answerable questions, dense
+   fixed abstained on 12/36 and earned 24/24 faithfulness, while BM25
+   heading and hybrid heading each abstained on 6/36 and earned
+   30/30 faithfulness. The faithfulness judge graded only grounded
+   non-refusals. Closed-book had no faithfulness score.
