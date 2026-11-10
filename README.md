@@ -27,6 +27,12 @@ Implemented through Day 20:
 
 Manual observations, failures and baseline results are recorded in NOTES.md.
 
+## Architecture
+
+- **Build the indexes.** During the Docker build, [`scripts/build_artifacts.py`](scripts/build_artifacts.py) fetches the pinned Transformers documentation and prefetches the pinned tokenizer, embedding model, and reranker. It ingests the selected pages, creates heading-aware passages, and builds a dense FAISS index and a BM25 index over those same passages.
+- **Serve questions.** The [Dockerfile](Dockerfile) starts Uvicorn with `src.api:app`. At startup, the [FastAPI app](src/api.py) checks the heading indexes and loads the embedding model and reranker. `GET /health` returns `{"status":"ok"}` after startup.
+- **Retrieve and answer.** `POST /ask` uses `hybrid_rerank_heading`. Dense and BM25 rankings are combined with reciprocal rank fusion, then a cross-encoder reranks the candidates. Up to five passages are sent to the grounded answer prompt. The Gemini completion layer supports a persistent response cache. The API returns the answer, cited source snippets, retrieval and completion timings, and token usage.
+
 ## Corpus
 
 - Source: https://github.com/huggingface/transformers
@@ -756,42 +762,25 @@ uses the Day 19 judge.
 
 ## Tests
 
+Run the synthetic pipeline and API checks from the repository root after setting up the Python 3.11 environment and caching the pinned tokenizer as described under [Fixed-size chunking](#fixed-size-chunking).
+
 ```powershell
-.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_fixture_pipeline.py tests/test_api.py
 ```
 
-Tests cover ingestion, source preservation, fixed and heading-aware chunking,
-fence handling, token limits, metadata, provenance, overwrite protection,
-FAISS serialization and row alignment, query-prefix handling, incompatible
-or changed index artifacts, and rejection of overlong inputs before inference.
-Evaluation-data tests cover source selection and existence, headings hidden in
-code or comments, split assignments, duplicate questions, unanswerable records,
-malformed JSON and minimum source counts for multi-step records.
-Retrieval-evaluation tests cover cutoff boundaries, chunk ranks, dev-only
-filtering, denominators including misses, result serialization, overwrite
-protection, retriever-specific provenance and dense/BM25 runner integration
-with fake retrievers. BM25 tests cover tokenization, source preservation,
-serialization, row alignment, lexical matching, tie-breaking and rejection
-of changed artifacts or incompatible settings.
-Hybrid and reranker tests cover fusion calculations, deterministic ties,
-matching chunk mappings, candidate depth, complete-record preservation,
-pair-length guards, score validation and reranking order. Evaluation tests
-also cover timing boundaries, named-run protection, combined provenance,
-model loading before retrieval and CLI routing. Retrieval and runner tests
-use synthetic fixtures; a separate real-model synthetic smoke check verified
-scoring and overflow rejection.
-The 34 LLM tests use mocked HTTP responses and temporary cache directories.
-They cover complete-input preservation and limits, usage, timing,
-incomplete-output rejection, error handling, persistent reuse without
-credentials or HTTP, cache-key changes, historical-entry preservation
-and corrupt-entry rejection. They also cover budget enforcement before
-generation and on cache hits.
-All 304 tests passed on Day 16.
+These tests exercise heading-aware chunking, BM25 retrieval over fixture documents, and the `/ask` response with stubbed retrieval and completion. They require no Gemini credentials or generated indexes.
 
-Chunking tests require the cached pinned tokenizer. Embedding length checks
-also require the cached complete model. The corpus integration test requires
-the downloaded source files. Index-writing and retrieval tests use tiny
-temporary indexes and known vectors.
+### CI and the DEV retrieval gate
+
+The [CI workflow](.github/workflows/ci.yml) runs the full pytest suite after fetching the pinned corpus and prefetching the models. It then builds both heading indexes and runs a dense retrieval smoke check on 36 answerable DEV questions.
+
+To run only the retrieval gate locally, use the existing pinned heading FAISS index and cached embedding model:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m eval.ci_retrieval --baseline eval/baseline.json
+```
+
+The gate counts a question as a hit when at least one of the first five retrieved passages comes from a gold source page. The baseline is 34/36, and CI fails if recall@5 drops by more than 3 percentage points. The command prints the result and uses no generation or judging.
 
 ## Repository layout
 
