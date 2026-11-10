@@ -3,6 +3,7 @@
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 from time import perf_counter
 
@@ -85,14 +86,18 @@ def _complete_uncached(
 ):
     """Return a complete text response, usage and elapsed milliseconds.
 
-    Reads the key specifically from the repository .env file.
+    Reads the key from the runtime environment, with a repository .env fallback.
     Does not truncate inputs, retry requests or cache responses.
     """
     _validate_inputs(system, prompt, temperature, max_tokens)
 
-    key = dotenv_values(REPO_ROOT / ".env").get("GEMINI_API_KEY")
+    key = os.environ.get("GEMINI_API_KEY")
+    if not key:
+        key = dotenv_values(REPO_ROOT / ".env").get("GEMINI_API_KEY")
     if not key or key == "replace_with_your_api_key":
-        raise RuntimeError("Set GEMINI_API_KEY in the repository .env file.")
+        raise RuntimeError(
+            "Set GEMINI_API_KEY in the runtime environment or the repository .env file."
+        )
 
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},

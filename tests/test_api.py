@@ -33,7 +33,10 @@ def test_ask_returns_cited_source_with_stubbed_completion(monkeypatch):
     monkeypatch.setattr(api, "get_embedding_model", lambda: None)
     monkeypatch.setattr(api, "get_reranker", lambda: None)
 
+    search_calls = []
+
     def fake_search(question, *, index_name, k):
+        search_calls.append(question)
         assert (question, index_name, k) == (
             "How do I group examples by length?",
             "heading",
@@ -59,9 +62,21 @@ def test_ask_returns_cited_source_with_stubbed_completion(monkeypatch):
         },
     )
 
+    payload = {"question": "How do I group examples by length?"}
+    monkeypatch.delenv("DOCS_RAG_DEMO_KEY", raising=False)
     with TestClient(api.app) as client:
+        assert client.get("/health").json() == {"status": "ok"}
+        assert client.post("/ask", json=payload).status_code == 503
+
+        monkeypatch.setenv("DOCS_RAG_DEMO_KEY", "synthetic-demo-key")
+        assert client.post("/ask", json=payload).status_code == 401
+        assert client.post(
+            "/ask", json=payload, headers={"X-Demo-Key": "incorrect-key"}
+        ).status_code == 401
+        assert search_calls == []
+
         response = client.post(
-            "/ask", json={"question": "How do I group examples by length?"}
+            "/ask", json=payload, headers={"X-Demo-Key": "synthetic-demo-key"}
         )
 
     assert response.status_code == 200
