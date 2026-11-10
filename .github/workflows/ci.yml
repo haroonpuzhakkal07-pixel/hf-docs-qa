@@ -40,11 +40,16 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.14.1+cpu'
           python -m pip install -r requirements.txt
 
+      - name: Fetch pinned corpus and prefetch models
+        run: |
+          python -c 'from scripts.build_artifacts import fetch_corpus, prefetch_models; fetch_corpus(); prefetch_models()'
+
       - name: Run pytest
         run: python -m pytest
 
       - name: Build pinned heading indexes
-        run: python -m scripts.build_artifacts
+        run: |
+          python -c 'from scripts.build_artifacts import build_heading_indexes; build_heading_indexes()'
 
       - name: Check DEV recall@5
         run: python -m eval.ci_retrieval --baseline eval/baseline.json
