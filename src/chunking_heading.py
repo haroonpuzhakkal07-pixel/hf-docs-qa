@@ -410,9 +410,9 @@ def write_heading_dataset(source: Path, output: Path) -> dict:
         raise ValueError("Input dataset contains no documents")
 
     settings = {
-        "max_tokens": MAX_CHUNK_TOKENS,
-        "min_tokens": 80,
-        "overlap": 30,
+        "max_tokens": 128,
+        "min_tokens": 0,
+        "overlap": 0,
     }
     records = []
     seen_doc_ids = set()
