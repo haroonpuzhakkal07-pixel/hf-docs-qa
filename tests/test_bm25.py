@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import pickle
 
-from src import bm25
+from src import bm25, provenance
 from src.bm25 import BM25_SETTINGS, build_bm25, tokenize
 
 from types import SimpleNamespace
@@ -151,7 +151,7 @@ def bm25_case(tmp_path, monkeypatch, request):
 
     monkeypatch.setattr(bm25, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(
-        bm25.subprocess,
+        provenance.subprocess,
         "check_output",
         lambda arguments, **kwargs: (
             "fixture-commit\n"

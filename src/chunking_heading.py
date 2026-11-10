@@ -13,10 +13,10 @@ from src.config import (
     REPO_ROOT,
 )
 from src.markdown_structure import find_content_blocks, find_heading_sections
+from src.provenance import source_provenance
 
 import hashlib
 import json
-import subprocess
 from importlib.metadata import version
 from pathlib import Path
 from statistics import mean
@@ -458,13 +458,6 @@ def write_heading_dataset(source: Path, output: Path) -> dict:
         for record in records
     ).encode("utf-8")
 
-    def git_output(*arguments: str) -> str:
-        return subprocess.check_output(
-            ["git", *arguments],
-            cwd=REPO_ROOT,
-            text=True,
-        ).strip()
-
     counts = [record["token_count"] for record in records]
     manifest = {
         "schema_version": 1,
@@ -481,10 +474,7 @@ def write_heading_dataset(source: Path, output: Path) -> dict:
             "oversized_code": "preserved source fragments in outer Markdown fences",
         },
         "corpus_commit": CORPUS_COMMIT,
-        "git_commit": git_output("rev-parse", "HEAD"),
-        "git_dirty": bool(git_output(
-            "status", "--porcelain", "--untracked-files=normal"
-        )),
+        **source_provenance(REPO_ROOT),
         "input_sha256": hashlib.sha256(source_bytes).hexdigest(),
         "output_sha256": hashlib.sha256(output_bytes).hexdigest(),
         "code_sha256": {

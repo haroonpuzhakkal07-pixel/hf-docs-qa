@@ -6,13 +6,13 @@ import hashlib
 import json
 import pickle
 import platform
-import subprocess
 from importlib.metadata import version
 from functools import lru_cache
 import numpy as np
 import argparse
 
 from src.config import CORPUS_COMMIT, REPO_ROOT
+from src.provenance import source_provenance
 
 
 TOKEN_PATTERN = r"[a-z0-9_]+"
@@ -96,20 +96,12 @@ def write_bm25_index(index_name: str) -> dict:
     _, tokenized = build_bm25(records)
     token_bytes = pickle.dumps(tokenized, protocol=4)
 
-    def git_output(*arguments: str) -> str:
-        return subprocess.check_output(
-            ["git", *arguments], cwd=REPO_ROOT, text=True,
-        ).strip()
-
     manifest = {
         "schema_version": 1,
         "retriever": "bm25",
         "chunker": index_name,
         "corpus_commit": CORPUS_COMMIT,
-        "git_commit": git_output("rev-parse", "HEAD"),
-        "git_dirty": bool(git_output(
-            "status", "--porcelain", "--untracked-files=all",
-        )),
+        **source_provenance(REPO_ROOT, untracked="all"),
         "tokenizer": {
             "pattern": TOKEN_PATTERN,
             "lowercase": True,

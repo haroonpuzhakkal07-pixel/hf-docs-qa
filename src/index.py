@@ -3,7 +3,6 @@
 import argparse
 import hashlib
 import json
-import subprocess
 from importlib.metadata import version
 
 import faiss
@@ -17,6 +16,7 @@ from src.config import (
     REPO_ROOT,
 )
 from src.embeddings import QUERY_PREFIX, encode_texts, get_embedding_model
+from src.provenance import source_provenance
 
 
 def sha256(data: bytes) -> str:
@@ -82,19 +82,11 @@ def build_index(chunker: str, *, batch_size: int = 64) -> dict:
         raise ValueError("Index row count does not match chunk count")
     index_bytes = faiss.serialize_index(index).tobytes()
 
-    def git_output(*arguments: str) -> str:
-        return subprocess.check_output(
-            ["git", *arguments], cwd=REPO_ROOT, text=True
-        ).strip()
-
     manifest = {
         "schema_version": 1,
         "chunker": chunker,
         "corpus_commit": CORPUS_COMMIT,
-        "git_commit": git_output("rev-parse", "HEAD"),
-        "git_dirty": bool(git_output(
-            "status", "--porcelain", "--untracked-files=normal"
-        )),
+        **source_provenance(REPO_ROOT),
         "embedding": {
             "model": EMBEDDING_MODEL,
             "revision": EMBEDDING_REVISION,

@@ -6,7 +6,7 @@ import faiss
 import numpy as np
 import pytest
 
-from src import embeddings
+from src import embeddings, provenance
 from src import index as indexing
 from src.config import CORPUS_COMMIT, EMBEDDING_MODEL, EMBEDDING_REVISION
 
@@ -91,7 +91,7 @@ def index_case(tmp_path, monkeypatch, request):
         indexing, "get_embedding_model",
         lambda: SimpleNamespace(max_seq_length=512),
     )
-    monkeypatch.setattr(indexing.subprocess, "check_output", fake_git)
+    monkeypatch.setattr(provenance.subprocess, "check_output", fake_git)
 
     return SimpleNamespace(
         chunker=chunker,
