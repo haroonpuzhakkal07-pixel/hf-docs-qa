@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      HF_HOME: ${{ runner.temp }}/huggingface
       HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
 
     steps:
@@ -26,6 +25,9 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements.txt
+
+      - name: Set Hugging Face cache directory
+        run: echo "HF_HOME=$RUNNER_TEMP/huggingface" >> "$GITHUB_ENV"
 
       - name: Cache Hugging Face models
         uses: actions/cache@v5
