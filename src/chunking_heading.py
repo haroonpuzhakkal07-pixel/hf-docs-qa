@@ -410,9 +410,9 @@ def write_heading_dataset(source: Path, output: Path) -> dict:
         raise ValueError("Input dataset contains no documents")
 
     settings = {
-        "max_tokens": 128,
-        "min_tokens": 0,
-        "overlap": 0,
+        "max_tokens": MAX_CHUNK_TOKENS,
+        "min_tokens": 80,
+        "overlap": 30,
     }
     records = []
     seen_doc_ids = set()
@@ -452,6 +452,15 @@ def write_heading_dataset(source: Path, output: Path) -> dict:
 
         if covered_until != len(text):
             raise ValueError(f"Incomplete source coverage: {path}")
+
+    # Temporary CI proof: retain only the first passage from each document.
+    max_passages_per_document = 1
+    records = [
+        record
+        for record in records
+        if int(record["chunk_id"].rsplit("::", 1)[1]) < max_passages_per_document
+    ]
+    settings["max_passages_per_document"] = max_passages_per_document
 
     output_bytes = "".join(
         json.dumps(record, ensure_ascii=False) + "\n"
