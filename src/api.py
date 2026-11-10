@@ -4,6 +4,7 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from secrets import compare_digest
+from time import perf_counter
 from typing import Annotated
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -12,7 +13,7 @@ from pydantic import BaseModel, StringConstraints
 from src.embeddings import get_embedding_model
 from src.generate import CompletionUnavailable, answer
 from src.hybrid import check_hybrid_indexes
-from src.rerank import get_reranker
+from src.rerank import get_reranker, reranked_search
 from src.retrieve import load_index
 
 
@@ -77,6 +78,34 @@ def ask(
         x_demo_key.encode("utf-8"), expected_key.encode("utf-8")
     ):
         raise HTTPException(status_code=401, detail="Invalid or missing demo key.")
+
+    if os.environ.get("DOCS_RAG_RETRIEVAL_ONLY") == "1":
+        started = perf_counter()
+        chunks = reranked_search(body.question, index_name="heading", k=3)
+        retrieval_ms = (perf_counter() - started) * 1000
+
+        sources = [
+            Source(
+                passage=number,
+                path=chunk["path"],
+                heading=chunk["heading_path"],
+                snippet=" ".join(chunk["source_text"].split())[:240],
+            )
+            for number, chunk in enumerate(chunks, start=1)
+        ]
+        return AskResponse(
+            answer=(
+                "Retrieval-only demo. See the ranked documentation excerpts below."
+                if sources
+                else "Retrieval-only demo. No documentation excerpts were returned."
+            ),
+            sources=sources,
+            retrieval_ms=retrieval_ms,
+            llm_ms=0.0,
+            token_usage=TokenUsage(
+                tokens_in=0, tokens_out=0, thinking_tokens=0, total_tokens=0
+            ),
+        )
 
     try:
         result = answer(body.question, "hybrid_rerank_heading")
