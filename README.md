@@ -866,3 +866,5 @@ evaluation results are tracked.
 - Dense search can confuse related models or retrieve the right page without the required answering passage. Manual observations do not establish general retrieval quality.
 
 See [NOTES.md](NOTES.md) for decisions, source observations and evaluation candidates.
+
+[![CI](https://github.com/haroonpuzhakkal07-pixel/hf-docs-qa/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/haroonpuzhakkal07-pixel/hf-docs-qa/actions/workflows/ci.yml?query=branch%3Amain)

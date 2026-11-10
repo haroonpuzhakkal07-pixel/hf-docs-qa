@@ -1,0 +1,17 @@
+{
+  "config": {
+    "fixture_sha256": "0ff9a1498fc818237f10aba2473ff8666a1a3a5a74338dd9c0db74c773a50aca",
+    "split": "dev",
+    "answerable_only": true,
+    "retriever": "dense",
+    "index": "heading",
+    "retrieval_depth": 5,
+    "metric": "fraction of questions with any gold-page hit in the first 5 chunks",
+    "corpus_commit": "469230357aab0f2b303b0d638c1f8d06edb14184",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "embedding_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
+  },
+  "n_questions": 36,
+  "hits_at_5": 34,
+  "recall_at_5": 0.9444444444444444
+}
