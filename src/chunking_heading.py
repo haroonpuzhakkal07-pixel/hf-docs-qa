@@ -453,15 +453,6 @@ def write_heading_dataset(source: Path, output: Path) -> dict:
         if covered_until != len(text):
             raise ValueError(f"Incomplete source coverage: {path}")
 
-    # Temporary CI proof: retain only the first passage from each document.
-    max_passages_per_document = 1
-    records = [
-        record
-        for record in records
-        if int(record["chunk_id"].rsplit("::", 1)[1]) < max_passages_per_document
-    ]
-    settings["max_passages_per_document"] = max_passages_per_document
-
     output_bytes = "".join(
         json.dumps(record, ensure_ascii=False) + "\n"
         for record in records
