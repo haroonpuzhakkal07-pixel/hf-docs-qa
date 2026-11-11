@@ -814,16 +814,85 @@ retain original response usage and report zero current API usage.
 
 ## Day 20 DEV comparison
 
-The comparison uses 45 DEV questions per configuration, including 36
-answerable and 9 unanswerable questions. See the [overall and per-type
-tables](eval/results/summary.md) and [summary CSV](eval/results/summary.csv)
-for counts, denominators, and the timing and cost methodology.
+Each configuration ran on the same 45 DEV questions: 36 answerable and 9
+unanswerable. Grounded configurations used up to five retrieved passages.
 
-BM25 heading and hybrid heading each scored 30/36 on correctness and
-35/36 on page-level recall@5. Closed-book scored 28/36 on correctness.
-All six configurations used the expected exact abstention on all nine
-unanswerable questions. Faithfulness covers grounded non-refusals and
-uses the Day 19 judge.
+| Configuration | Page recall@5 | Correctness | Faithfulness | Correct refusals | Over-refusals |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Closed-book | N/A | 28/36 | N/A | 9/9 | 3/36 |
+| Dense, fixed chunks | 32/36 | 24/36 | 24/24 | 9/9 | 12/36 |
+| Dense, heading-aware chunks | 34/36 | 27/36 | 27/27 | 9/9 | 9/36 |
+| BM25, heading-aware chunks | 35/36 | 30/36 | 30/30 | 9/9 | 6/36 |
+| Hybrid, heading-aware chunks | 35/36 | 30/36 | 30/30 | 9/9 | 6/36 |
+| Hybrid with reranking, heading-aware chunks | 35/36 | 29/36 | 29/29 | 9/9 | 7/36 |
+
+Page recall@5 counts answerable questions with at least one gold source page in
+the top five. Correctness covers all answerable questions, including refusals.
+Faithfulness covers grounded responses that answered. Correct refusals and
+over-refusals count exact refusals on unanswerable and answerable questions,
+respectively.
+
+See the [full DEV report](eval/results/summary.md) and
+[summary CSV](eval/results/summary.csv) for per-type results, timing, and cost.
+
+### Key findings
+
+- The heading-aware dense configuration reached 34/36 on page recall@5 and
+  27/36 on correctness. The fixed-chunk dense configuration reached 32/36
+  and 24/36, respectively.
+- BM25 and hybrid tied for the highest correctness at 30/36. The reranked
+  hybrid configuration scored 29/36. All three had 35/36 page recall@5.
+- Hybrid retrieved at least one gold source page for 8/9 multi-step questions
+  and answered 3/9 correctly. Page recall measures whether retrieval found
+  at least one relevant page. Multi-step answers can require several pieces
+  of evidence.
+- All six configurations correctly refused 9/9 unanswerable questions.
+  The five grounded configurations also refused between 6 and 12 of the
+  36 answerable questions.
+
+### Judge agreement on DEV
+
+Gemini 3.1 Flash-Lite matched 18 of 20 assistant-assisted correctness
+reference grades (90%) in the Day 19 DEV validation sample. It matched all
+16 positive grades and 2 of 4 negative grades. Both disagreements were
+false positives against the reference grades.
+
+```mermaid
+pie showData title Day 19 DEV correctness judge agreement
+    "Matched reference grade" : 18
+    "Disagreed with reference grade" : 2
+```
+
+### DEV error analysis
+
+The Day 22 review covered all six incorrect answers from the heading-aware
+hybrid configuration. All six were refusals on answerable multi-step questions.
+
+| Cause | Count | What the review found |
+| --- | ---: | --- |
+| Retrieval miss | 5/6 | The top five passages lacked evidence for at least one part of the answer. |
+| Wrong refusal | 1/6 | The retrieved passages supported a qualified answer. |
+
+See the [Day 22 DEV error analysis](eval/error_analysis.csv) for the
+per-question evidence.
+
+### DEV retrieval depth experiment
+
+Day 23 compared the top five and top eight passages from the same heading-aware
+hybrid rankings for 36 answerable DEV questions.
+
+| Gold source coverage | Top 5 | Top 8 |
+| --- | ---: | ---: |
+| At least one gold page, all answerable questions | 35/36 | 35/36 |
+| At least one gold page, multi-step questions | 8/9 | 8/9 |
+| All gold pages, all answerable questions | 32/36 | 34/36 |
+| All gold pages, multi-step questions | 5/9 | 7/9 |
+
+Manual review found that the extra passages supplied missing evidence in 3 of
+the 5 retrieval misses identified on Day 22. The experiment measured source
+coverage. The answer-generation path uses up to five passages.
+
+See the [Day 23 DEV experiment notes](NOTES.md#day-23-dev-retrieval-depth-experiment).
 
 ## Tests
 
@@ -909,13 +978,27 @@ Downloaded sources, processed corpus data, indexes, the virtual environment
 and temporary files are ignored by Git. The selection report and retrieval
 evaluation results are tracked.
 
+## What didn't work
+
+- The fixed-chunk dense configuration refused 8 of 9 answerable multi-step
+  questions in the Day 20 DEV comparison.
+- Hybrid with reranking answered 17/18 DEV lookup questions correctly, compared
+  with 18/18 for hybrid. Both retrieved a gold page for all 18 lookup questions.
+- In the Day 19 DEV judge validation, the judge accepted an incomplete answer
+  that named TF32 but omitted the change to the mantissa.
+
 ## Limitations
 
 - Remaining HTML, comments and doc-builder markup are retained.
 - Autodoc directives are not expanded into API descriptions. Detailed API questions may lack sufficient source evidence.
 - Source examples and inconsistencies are preserved; ingestion does not validate or repair them.
 - Cleaning has preservation checks, but its effect on retrieval quality has not yet been measured.
-- Answers and evaluation will refer to the pinned corpus version.
+- The evaluation uses one pinned revision of the Transformers documentation and
+  a curated question set. Performance on questions from real users is unmeasured.
+- The DEV multi-step slice has nine questions. One answer changes its
+  correctness rate by about 11 percentage points.
+- Correctness and faithfulness scores depend on an LLM judge, so errors in its
+  verdicts can affect the reported scores.
 - Structural scanning handles the observed corpus patterns but is not a complete Markdown parser. Oversized code is represented as source fragments.
 - Dense search can confuse related models or retrieve the right page without the required answering passage. Manual observations do not establish general retrieval quality.
 
