@@ -1,0 +1,1050 @@
+{
+  "repository": "https://github.com/huggingface/transformers",
+  "revision": "469230357aab0f2b303b0d638c1f8d06edb14184",
+  "passages": [
+    {
+      "title": "Attention backends",
+      "heading": "Attention backends",
+      "text": "All attention implementations perform the same computation. Every token is compared to every other token. The difference is how the computation is performed. Basic attention scales poorly because it materializes the full attention matrix in memory, creating bottlenecks that slow down inference. Optimized implementations rearrange the math to reduce memory traffic for faster, more affordable inference.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 18,
+      "end": 18,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Attention backends",
+      "text": "The AttentionInterface provides optimized attention implementations. It decouples the attention implementation from the model implementation to simplify experimentation with different functions. Add new backends easily with this consistent interface.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 20,
+      "end": 20,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Set an attention backend",
+      "text": "Use the attn_implementation argument in PreTrainedModel.from_pretrained to instantiate a model with a specific attention function.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 36,
+      "end": 36,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Set an attention backend",
+      "text": "Switch between attention backends at runtime without reloading the model using PreTrainedModel.set_attn_implementation.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 47,
+      "end": 47,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Kernels",
+      "text": "Download and load compiled compute kernels directly from the Hub at runtime with the Kernels library. This avoids packaging issues from mismatched PyTorch or CUDA versions.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 55,
+      "end": 55,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Kernels",
+      "text": "Kernels automatically register to AttentionInterface upon detection. You don't need to install the FlashAttention package explicitly. Requesting FlashAttention by name also falls back to the Hub kernel, see FlashAttention fallback.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 57,
+      "end": 57,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "SDPA context manager",
+      "text": "PyTorch's scaled dot product attention (SDPA) selects the fastest attention function for CUDA backends automatically. It defaults to the PyTorch C++ implementation for other backends.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 70,
+      "end": 70,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "SDPA context manager",
+      "text": "Force SDPA to use a specific implementation with the torch.nn.attention.sdpa_kernel context manager.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 72,
+      "end": 72,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Backbone-specific attention",
+      "text": "Multimodal models use different backbones for each modality. Optimize performance by assigning specific attention functions to each backbone. Some vision backbones perform better in fp32, for example, which FlashAttention does not support.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 89,
+      "end": 89,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Backbone-specific attention",
+      "text": "Map vision backbones to different attention functions with a dict while the text backbone continues to use FlashAttention. Keys in the attention implementation must match sub-config names.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 91,
+      "end": 91,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Create a new attention function",
+      "text": "Customize or create new attention functions by adding them to the attention registry with AttentionInterface.register. Models use these functions through the attn_implementation argument.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 132,
+      "end": 132,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Create a new attention function",
+      "text": "This example customizes the attention function to print a statement for each layer. It keeps the mask in the original implementation by registering masking_utils.sdpa_mask as the attention mask function.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 137,
+      "end": 137,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "AttentionMaskInterface",
+      "text": "AttentionMaskInterface is the registry the create__mask functions consult to convert a mask into the format the active attention backend expects. FlexAttention needs a BlockMask, SDPA needs a 4D tensor, and FlashAttention needs the base 2D padding mask. Register a custom backend, or override the formatter for an existing one, with AttentionMaskInterface.register.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 188,
+      "end": 188,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "AttentionMaskInterface",
+      "text": "Without a registered formatter for the active attn_implementation, mask creation is skipped and attention_mask=None passes to the attention layers.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 202,
+      "end": 202,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Build an attention mask",
+      "text": "Build attention masks with the create__mask functions in transformers.masking_utils. Each function reads the active attention backend from the model config, looks up the backend's mask formatter in AttentionMaskInterface, and returns the format that backend expects. You don't need to invert, expand, or cast the mask yourself.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 226,
+      "end": 226,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Build an attention mask",
+      "text": "Call create_causal_mask inside a decoder forward pass. Pass the config, the input embeddings, the user-provided 2D attention_mask, and the cache. The function uses the embeddings to read the batch size, query length, dtype, and device, and uses the cache to compute the key length.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 244,
+      "end": 244,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Pass a custom 4D attention mask",
+      "text": "Pass your own 4D mask when you need an attention pattern the create__mask functions can't express. A 4D mask has the shape (batch_size, 1, query_length, kv_length), where 1 broadcasts the same mask across every attention head. Transformers detects and uses the mask as-is, skipping create__mask.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 313,
+      "end": 313,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Pass a custom 4D attention mask",
+      "text": "The float convention adds the mask to the attention scores before the softmax. A score plus 0.0 stays unchanged, so the position contributes. A score plus -inf drops to zero after the softmax, so the position is excluded.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 322,
+      "end": 322,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Bidirectional attention",
+      "text": "Decoder-only models use causal (unidirectional) attention by default, where each token only attends to itself and previous tokens. Set is_causal=False to switch to bidirectional attention, where every token attends to every other token. This lets you use decoder-only models as text encoders, for example, to generate embeddings.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 367,
+      "end": 367,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Attention backends",
+      "heading": "Bidirectional attention",
+      "text": "Set is_causal=False in the model config to make bidirectional attention the default for every forward pass.",
+      "path": "docs/source/en/attention_interface.md",
+      "start": 372,
+      "end": 372,
+      "copyright": "Copyright 2025 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "Chat templates",
+      "text": "The chat basics guide covers how to store chat histories and generate text from chat models using TextGenerationPipeline.",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 19,
+      "end": 19,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "Chat templates",
+      "text": "This guide is intended for more advanced users, and covers the underlying classes and methods, as well as the key concepts for understanding what's actually going on when you chat with a model.",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 21,
+      "end": 21,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "Using apply_chat_template",
+      "text": "The input to apply_chat_template should be structured as a list of dictionaries with role and content keys. The role key specifies the speaker, and the content key contains the message. The common roles are:",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 78,
+      "end": 78,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "Using apply_chat_template",
+      "text": "apply_chat_template takes this list and returns a formatted sequence. Set tokenize=True if you want to tokenize the sequence.",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 84,
+      "end": 84,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "add_generation_prompt",
+      "text": "You may have noticed the PreTrainedTokenizerBase.apply_chat_template#add_generation_prompt argument in the above examples. This argument adds tokens to the end of the chat that indicate the start of an assistant response. Remember: Beneath all the chat abstractions, chat models are still just language models that continue a sequence of tokens! If you include tokens that tell it that it's now in an assistant response, it will correctly write a response, but if you don't include these tokens, the model may get confused and do something strange, like continuing the user's message instead of replying to it!",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 131,
+      "end": 133,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "add_generation_prompt",
+      "text": "Let's see an example to understand what add_generation_prompt is actually doing. First, let's format a chat without add_generation_prompt:",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 135,
+      "end": 135,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "continue_final_message",
+      "text": "The PreTrainedTokenizerBase.apply_chat_template#continue_final_message parameter controls whether the final message in the chat should be continued or not instead of starting a new one. It removes end of sequence tokens so that the model continues generation from the final message.",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 175,
+      "end": 175,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "continue_final_message",
+      "text": "This is useful for “prefilling” a model response. In the example below, the model generates text that continues the JSON string rather than starting a new message. It can be very useful for improving the accuracy of instruction following when you know how to start its replies.",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 177,
+      "end": 177,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "Model training",
+      "text": "Training a model with a chat template is a good way to ensure the template matches the tokens the model was trained on. Apply the chat template as a preprocessing step to your dataset. Set add_generation_prompt=False because the additional tokens to prompt an assistant response aren't helpful during training.",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 209,
+      "end": 209,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Chat templates",
+      "heading": "Model training",
+      "text": "After this step, you can continue following the training recipe for causal language models using the formatted_chat column.",
+      "path": "docs/source/en/chat_templating.md",
+      "start": 240,
+      "end": 240,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Generation strategies",
+      "text": "A decoding strategy informs how a model should select the next generated token. There are many types of decoding strategies, and choosing the appropriate one has a significant impact on the quality of the generated text.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 19,
+      "end": 19,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Generation strategies",
+      "text": "This guide will help you understand the different decoding strategies available in Transformers and how and when to use them.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 21,
+      "end": 21,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Basic decoding methods",
+      "text": "These are well established decoding methods, and should be your starting point for text generation tasks.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 25,
+      "end": 25,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Greedy search",
+      "text": "Greedy search is the default decoding strategy. It selects the next most likely token at each step. Unless specified in GenerationConfig, this strategy generates a maximum of 20 new tokens.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 29,
+      "end": 29,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Greedy search",
+      "text": "Greedy search works well for tasks with relatively short outputs where creativity is not a priority. However, it breaks down when generating longer sequences because it begins to repeat itself.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 31,
+      "end": 31,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Sampling",
+      "text": "Sampling, or multinomial sampling, randomly selects a token based on the probability distribution over the entire model's vocabulary (as opposed to the most likely token, as in greedy search). This means every token with a non-zero probability has a chance to be selected. Sampling strategies reduce repetition and can generate more creative and diverse outputs.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 52,
+      "end": 52,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Beam search",
+      "text": "Beam search keeps track of several generated sequences (beams) at each time step. After a certain number of steps, it selects the sequence with the highest overall probability. Unlike greedy search, this strategy can \"look ahead\" and pick a sequence with a higher probability overall even if the initial tokens have a lower probability. It is best suited for input-grounded tasks, like describing an image or speech recognition. You can also use do_sample=True with beam search to sample at each step, but beam search will still greedily prune out low probability sequences between steps.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 75,
+      "end": 75,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Beam search",
+      "text": "Enable beam search with the num_beams parameter (should be greater than 1 otherwise it's equivalent to greedy search).",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 80,
+      "end": 80,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Custom generation methods",
+      "text": "We enable custom generation methods through model repositories, assuming a specific model tag and file structure (see subsection below). This feature is an extension of custom modeling code and, like such, requires setting trust_remote_code=True.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 108,
+      "end": 108,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Custom generation methods",
+      "text": "If a model repository holds a custom generation method, the easiest way to try it out is to load the model and generate with it:",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 110,
+      "end": 110,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Creating a custom generation method",
+      "text": "To create a new generation method, you need to create a new Model repository and push a few files into it.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 174,
+      "end": 174,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Creating a custom generation method",
+      "text": "1. The model you've designed your generation method with. 2. custom_generate/generate.py, which contains all the logic for your custom generation method. 3. custom_generate/requirements.txt, used to optionally add new Python requirements and/or lock specific versions to correctly use your method. 4. README.md, where you should add the custom_generate tag and document any new arguments or output type differences of your custom method here.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 176,
+      "end": 179,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Reusing generate's input preparation",
+      "text": "If you're adding a new decoding loop, you might want to preserve the input preparation present in generate (batch expansion, attention masks, logits processors, stopping criteria, etc.). You can also pass a callable to custom_generate to reuse GenerationMixin.generate's full preparation pipeline while overriding only the decoding loop.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 300,
+      "end": 300,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Finding custom generation methods",
+      "text": "You can find all custom generation methods by searching for their custom tag., custom_generate. In addition to the tag, we curate two collections of custom_generate methods:",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 325,
+      "end": 325,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Generation strategies",
+      "heading": "Resources",
+      "text": "Read the How to generate text: using different decoding methods for language generation with Transformers blog post for an explanation of how common decoding strategies work.",
+      "path": "docs/source/en/generation_strategies.md",
+      "start": 332,
+      "end": 332,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Cache strategies",
+      "text": "The key-value (KV) vectors are used to calculate attention scores. For autoregressive models, KV scores are calculated every time because the model predicts one token at a time. Each prediction depends on the previous tokens, which means the model performs the same computations each time.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 19,
+      "end": 19,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Cache strategies",
+      "text": "A KV cache stores these calculations so they can be reused without recomputing them. Efficient caching is crucial for optimizing model performance because it reduces computation time and improves response rates. Refer to the Caching doc for a more detailed explanation about how a cache works.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 21,
+      "end": 21,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Default cache",
+      "text": "The DynamicCache is the default cache class for all models. It allows the cache size to grow dynamically in order to store an increasing number of keys and values as generation progresses.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 35,
+      "end": 35,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Default cache",
+      "text": "Note that for models using sliding window attention (Mistral, Gemma2,...) or chunked attention (Llama4), the cache will stop growing when the layers using these types of attention have reached their maximum size (the sliding window or chunk size).",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 37,
+      "end": 37,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Fixed-size cache",
+      "text": "The default DynamicCache prevents you from taking advantage of most just-in-time (JIT) optimizations because the cache size isn't fixed. JIT optimizations enable you to minimize latency at the expense of memory usage. All of the following cache types are compatible with JIT optimizations like torch.compile to accelerate generation.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 70,
+      "end": 70,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Fixed-size cache",
+      "text": "As for DynamicCache, note that for models using sliding window attention (Mistral, Gemma2,...) or chunked attention (Llama4), the cache will never be larger than the sliding window/chunk size on layers using these types of attention, even if the maximum length specified is larger.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 74,
+      "end": 74,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Keep generation tensors on CPU",
+      "text": "Compiler backends like Neuron and TPU trace your model into a fixed computation graph. The generation loop maintains tensors (output sequence, attention_mask, position_ids) that grow by one token each step. The compiler retraces the graph whenever these tensors change shape on the accelerator, which slows generation.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 93,
+      "end": 93,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Keep generation tensors on CPU",
+      "text": "GenerationMixin.generate moves only the tensors that forward consumes onto the model device, right before each forward call. The output is moved back to match the device of the input. Pass your inputs on CPU to keep the loop's growing tensor bookkeeping off the accelerator. The compiled graph stays stable, and because the output follows the input device, the generated output stays on CPU.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 95,
+      "end": 95,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Cache offloading",
+      "text": "The KV cache can occupy a significant portion of memory and become a bottleneck for long-context generation. Memory efficient caches focus on trading off speed for reduced memory usage. This is especially important for large language models (LLMs) and if your hardware is memory constrained.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 115,
+      "end": 115,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Cache offloading",
+      "text": "Offloading the cache saves GPU memory by moving the KV cache for model layers except one to the CPU. Only the current layer cache is maintained on the GPU during a models forward iteration over the layers. It will asynchronously prefetch the next layer's cache, and send back the current layer's cache back to the CPU after attention computation.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 117,
+      "end": 117,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Quantized cache",
+      "text": "The QuantizedCache reduces memory requirements by quantizing the KV values to a lower precision. QuantizedCache currently supports two quantization backends:",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 179,
+      "end": 179,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Quantized cache",
+      "text": "Enable QuantizedCache by configuring cache_implementation=\"quantized\" in GenerationConfig, and the quantization backend, as well as any additional quantization related parameters should also be passed either as a dict. You should use the default values for these additional parameters unless you're running out-of-memory. In that case, consider decreasing the residual length.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 187,
+      "end": 187,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Encoder-decoder cache",
+      "text": "EncoderDecoderCache is designed for encoder-decoder models. It manages both the self-attention and cross-attention caches to ensure storage and retrieval of previous kv pairs. It is possible to individually set a different cache type for the encoder and decoder.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 223,
+      "end": 223,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Encoder-decoder cache",
+      "text": "This cache type doesn't require any setup. It is a simple wrapper around 2 Caches as described above, that will be used independently directly by the model.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 225,
+      "end": 225,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Model-specific caches",
+      "text": "Some models have a unique way of storing past kv pairs or states that is not compatible with any other cache classes.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 229,
+      "end": 229,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Model-specific caches",
+      "text": "Mamba models, such as Mamba, require a specific cache because the model doesn't have an attention mechanism or kv states. Thus, they are not compatible with the above Cache classes.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 231,
+      "end": 231,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Iterative generation",
+      "text": "A cache can also work in iterative generation settings where there is back-and-forth interaction with a model (chatbots). Like regular generation, iterative generation with a cache allows a model to efficiently handle ongoing conversations without recomputing the entire context at each step.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 235,
+      "end": 235,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Iterative generation",
+      "text": "For iterative generation with a cache, start by initializing an empty cache class and then you can feed in your new prompts. Keep track of dialogue history with a chat template.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 237,
+      "end": 237,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Crop a cache",
+      "text": "Use Cache.crop to roll back tokens from a cache, such as when a candidate continuation is rejected during iterative generation. Pass the number of tokens to remove as a negative integer.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 267,
+      "end": 267,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Crop a cache",
+      "text": "Sliding-window and linear-attention layers discard past states as they go, so there's nothing to roll back to by default. Call Cache.activate_past_recording before the forward pass to make them hold onto those states. Without it, crop raises a RuntimeError once a sliding-window layer fills its window, and immediately for linear-attention layers.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 274,
+      "end": 274,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Prefill a cache (prefix caching)",
+      "text": "In some situations, you may want to fill a Cache with kv pairs for a certain prefix prompt and reuse it to generate different sequences.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 306,
+      "end": 306,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Cache strategies",
+      "heading": "Prefill a cache (prefix caching)",
+      "text": "The example below initializes a StaticCache, and then caches an initial prompt. Now you can generate several sequences from the prefilled prompt.",
+      "path": "docs/source/en/kv_cache.md",
+      "start": 308,
+      "end": 308,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Pipeline",
+      "text": "The Pipeline is a simple but powerful inference API that is readily available for a variety of machine learning tasks with any model from the Hugging Face Hub.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 19,
+      "end": 19,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Pipeline",
+      "text": "Tailor the Pipeline to your task with task specific parameters such as adding timestamps to an automatic speech recognition (ASR) pipeline for transcribing meeting notes. Pipeline supports GPUs, Apple Silicon, and half-precision weights to accelerate inference and save memory.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 21,
+      "end": 21,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Tasks",
+      "text": "Pipeline is compatible with many machine learning tasks across different modalities. Pass an appropriate input to the pipeline and it will handle the rest.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 57,
+      "end": 57,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Tasks",
+      "text": "Here are some examples of how to use Pipeline for different tasks and modalities.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 59,
+      "end": 59,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Parameters",
+      "text": "At a minimum, Pipeline only requires a task identifier, model, and the appropriate input. But there are many parameters available to configure the pipeline with, from task-specific parameters to optimizing performance.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 108,
+      "end": 108,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Device",
+      "text": "Pipeline is compatible with many hardware types, including GPUs, CPUs, Apple Silicon, and more. Configure the hardware type with the device parameter. By default, when device is left unset, Pipeline automatically places the model on the first available accelerator (CUDA GPU, Apple Silicon MPS, XPU, ...) and only falls back to a CPU when none is available. Pass device=\"cpu\" to force it to run on a CPU.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 114,
+      "end": 114,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Device",
+      "text": "To run Pipeline on a GPU, set device to the associated CUDA device id. For example, device=0 runs on the first GPU.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 119,
+      "end": 119,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Batch inference",
+      "text": "Pipeline can also process batches of inputs with the batch_size parameter. Batch inference may improve speed, especially on a GPU, but it isn't guaranteed. Other variables such as hardware, data, and the model itself can affect whether batch inference improves speed. For this reason, batch inference is disabled by default.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 161,
+      "end": 161,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Batch inference",
+      "text": "In the example below, when there are 4 inputs and batch_size is set to 2, Pipeline passes a batch of 2 inputs to the model at a time.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 163,
+      "end": 163,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Task-specific parameters",
+      "text": "Pipeline accepts any parameters that are supported by each individual task pipeline. Make sure to check out each individual task pipeline to see what type of parameters are available. If you can't find a parameter that is useful for your use case, please feel free to open a GitHub issue to request it!",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 207,
+      "end": 207,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Task-specific parameters",
+      "text": "Pass the return_timestamps=\"word\" parameter to Pipeline to return when each word was spoken.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 214,
+      "end": 214,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Chunk batching",
+      "text": "The ChunkPipeline class is designed to handle these use cases. Both pipeline classes are used in the same way, but since ChunkPipeline can automatically handle batching, you don't need to worry about the number of forward passes your inputs trigger. Instead, you can optimize batch_size independently of the inputs.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 273,
+      "end": 273,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Large datasets",
+      "text": "For inference with large datasets, you can iterate directly over the dataset itself. This avoids immediately allocating memory for the entire dataset, and you don't need to worry about creating batches yourself. Try Batch inference with the batch_size parameter to see if it improves performance.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 293,
+      "end": 293,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Large datasets",
+      "text": "Other ways to run inference on large datasets with Pipeline include using an iterator or generator.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 309,
+      "end": 309,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Large models",
+      "text": "Accelerate enables a couple of optimizations for running large models with Pipeline. Make sure Accelerate is installed first.",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 324,
+      "end": 324,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Pipeline",
+      "heading": "Large models",
+      "text": "The device_map=\"auto\" setting is useful for automatically distributing the model across the fastest devices (GPUs) first before dispatching to other slower devices if available (CPU, hard drive).",
+      "path": "docs/source/en/pipeline_tutorial.md",
+      "start": 330,
+      "end": 330,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Bitsandbytes",
+      "text": "The bitsandbytes library provides quantization tools for LLMs through a lightweight Python wrapper around hardware accelerator functions. It enables working with large models using limited computational resources by reducing their memory footprint.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 19,
+      "end": 19,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Bitsandbytes",
+      "text": "1. LLM.int8() - An 8-bit quantization method that makes inference more accessible without significant performance degradation. Unlike naive quantization, LLM.int8() dynamically preserves higher precision for critical computations, preventing information loss in sensitive parts of the model.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 29,
+      "end": 29,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Hardware Compatibility",
+      "text": "bitsandbytes is supported on NVIDIA GPUs for CUDA versions 11.8 - 13.0, Intel XPU, Intel Gaudi (HPU), and CPU. There is an ongoing effort to support additional platforms. If you're interested in providing feedback or testing, check out the bitsandbytes repository for more information.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 45,
+      "end": 45,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "NVIDIA GPUs (CUDA)",
+      "text": "This backend is supported on Linux x86-64, Linux aarch64, and Windows platforms.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 49,
+      "end": 49,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "CPU",
+      "text": "This backend is supported on Linux x86-64, Linux aarch64, and Windows x86-64 platforms.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 67,
+      "end": 67,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Quantization Examples",
+      "text": "Quantize a model by passing a BitsAndBytesConfig to PreTrainedModel.from_pretrained. This works for any model in any modality, as long as it supports Accelerate and contains torch.nn.Linear layers.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 71,
+      "end": 71,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Quantization Examples",
+      "text": "Quantizing a model in 8-bit halves the memory-usage, and for large models, set device_map=\"auto\" to efficiently distribute the weights across all available GPUs.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 76,
+      "end": 76,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "LLM.int8",
+      "text": "This section explores some of the specific features of 8-bit quantization, such as offloading, outlier thresholds, skipping module conversion, and finetuning.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 197,
+      "end": 197,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Offloading",
+      "text": "8-bit models can offload weights between the CPU and GPU to fit very large models into memory. The weights dispatched to the CPU are stored in float32 and aren't converted to 8-bit. For example, enable offloading for bigscience/bloom-1b7 through BitsAndBytesConfig.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 201,
+      "end": 201,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Offloading",
+      "text": "Design a custom device map to fit everything on your GPU except for the lm_head, which is dispatched to the CPU.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 209,
+      "end": 209,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Outlier threshold",
+      "text": "An \"outlier\" is a hidden state value greater than a certain threshold, and these values are computed in fp16. While the values are usually normally distributed ([-3.5, 3.5]), this distribution can be very different for large models ([-60, 6] or [6, 60]). 8-bit quantization works well for values ~5, but beyond that, there is a significant performance penalty. A good default threshold value is 6, but a lower threshold may be needed for more unstable models (small models or finetuning).",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 234,
+      "end": 234,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Outlier threshold",
+      "text": "To find the best threshold for your model, experiment with the llm_int8_threshold parameter in BitsAndBytesConfig. For example, setting the threshold to 0.0 significantly speeds up inference at the potential cost of some accuracy loss.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 236,
+      "end": 236,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Skip module conversion",
+      "text": "For some models, like Jukebox, you don't need to quantize every module to 8-bit because it can actually cause instability. With Jukebox, there are several lm_head modules that should be skipped using the llm_int8_skip_modules parameter in BitsAndBytesConfig.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 258,
+      "end": 258,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Finetuning",
+      "text": "The PEFT library supports fine-tuning large models like flan-t5-large and facebook/opt-6.7b with 8-bit quantization. You don't need to pass the device_map parameter for training because it automatically loads your model on a GPU. However, you can still customize the device map with the device_map parameter (device_map=\"auto\" should only be used for inference).",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 279,
+      "end": 279,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "QLoRA",
+      "text": "This section explores some of the specific features of 4-bit quantization, such as changing the compute data type, the Normal Float 4 (NF4) data type, and nested quantization.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 283,
+      "end": 283,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Compute data type",
+      "text": "Change the data type from float32 (the default value) to bf16 in BitsAndBytesConfig to speedup computation.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 287,
+      "end": 287,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Normal Float 4 (NF4)",
+      "text": "NF4 is a 4-bit data type from the QLoRA paper, adapted for weights initialized from a normal distribution. You should use NF4 for training 4-bit base models.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 298,
+      "end": 298,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Normal Float 4 (NF4)",
+      "text": "For inference, the bnb_4bit_quant_type does not have a huge impact on performance. However, to remain consistent with the model weights, you should use the bnb_4bit_compute_dtype and dtype values.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 311,
+      "end": 311,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Nested quantization",
+      "text": "Nested quantization can save additional memory at no additional performance cost. This feature performs a second quantization of the already quantized weights to save an additional 0.4 bits/parameter. For example, with nested quantization, you can finetune a Llama-13b model on a 16GB NVIDIA T4 GPU with a sequence length of 1024, a batch size of 1, and enable gradient accumulation with 4 steps.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 315,
+      "end": 315,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Dequantizing bitsandbytes models",
+      "text": "Once quantized, you can PreTrainedModel.dequantize a model to the original precision but this may result in some quality loss. Make sure you have enough GPU memory to fit the dequantized model.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 330,
+      "end": 330,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Resources",
+      "text": "Learn more about the details of 8-bit quantization in A Gentle Introduction to 8-bit Matrix Multiplication for transformers at scale using Hugging Face Transformers, Accelerate and bitsandbytes.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 341,
+      "end": 341,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Bitsandbytes",
+      "heading": "Resources",
+      "text": "Try 4-bit quantization in this notebook and learn more about its details in Making LLMs even more accessible with bitsandbytes, 4-bit quantization and QLoRA.",
+      "path": "docs/source/en/quantization/bitsandbytes.md",
+      "start": 343,
+      "end": 343,
+      "copyright": "Copyright 2024 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "Tokenization algorithms",
+      "text": "Transformers support three subword tokenization algorithms: Byte pair encoding (BPE), Unigram, and WordPiece. They split text into units between words and characters, keeping the vocabulary compact while still capturing meaningful pieces. Common words stay intact as single tokens, and rare or unknown words decompose into subwords.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 21,
+      "end": 21,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "Tokenization algorithms",
+      "text": "For instance, annoyingly might be split into [\"annoying\", \"ly\"] or [\"annoy\", \"ing\", \"ly\"] depending on the vocabulary. Subword splitting lets the model represent unseen words from known subwords.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 23,
+      "end": 23,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "Byte pair encoding (BPE)",
+      "text": "Byte pair encoding (BPE) is the most popular tokenization algorithm in Transformers, used by models like Llama, Gemma, Qwen2, and more.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 32,
+      "end": 32,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "Byte pair encoding (BPE)",
+      "text": "1. A pre-tokenizer splits text on whitespace or other rules, producing a set of unique words and their frequencies.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 34,
+      "end": 34,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "Unigram",
+      "text": "Unigram is the second most popular tokenization algorithm in Transformers, used by models like T5, BigBird, Pegasus, and more.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 70,
+      "end": 70,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "Unigram",
+      "text": "1. Unigram starts with a large set of candidate subwords, and each candidate gets a probability score based on how often it appears.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 72,
+      "end": 72,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "SentencePiece",
+      "text": "SentencePiece is a tokenization library that applies BPE or Unigram directly on raw text. Standard BPE and Unigram assume whitespace separates words, which doesn't work for languages like Chinese and Japanese that don't use spaces.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 96,
+      "end": 96,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "SentencePiece",
+      "text": "1. SentencePiece treats the input text as a raw byte or character stream and includes the space character, represented as \"▁\", in the vocabulary.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 98,
+      "end": 98,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "WordPiece",
+      "text": "WordPiece is the tokenization algorithm for BERT-family models like DistilBERT and Electra.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 112,
+      "end": 112,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "WordPiece",
+      "text": "It's similar to BPE and iteratively merges pairs from the bottom up, but differs in how it selects pairs.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 114,
+      "end": 114,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    },
+    {
+      "title": "Tokenization algorithms",
+      "heading": "Word-level tokenization",
+      "text": "Word-level tokenization splits text into tokens by space, punctuation, or language-specific rules.",
+      "path": "docs/source/en/tokenizer_summary.md",
+      "start": 139,
+      "end": 139,
+      "copyright": "Copyright 2020 The HuggingFace Team. All rights reserved."
+    }
+  ]
+}

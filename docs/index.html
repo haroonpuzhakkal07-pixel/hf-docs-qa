@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Search selected passages from a pinned revision of the Hugging Face Transformers docs.">
+  <title>Transformers Docs Search</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">T</span> Transformers Docs QA</a>
+      <a href="https://github.com/haroonpuzhakkal07-pixel/hf-docs-qa">GitHub repository <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <p class="mode"><span aria-hidden="true"></span> Browser demo · keyword search</p>
+      <h1 id="page-title">Transformers<br>docs search<span>.</span></h1>
+      <p class="intro">Find relevant excerpts from a selection of Hugging Face Transformers docs. Open any result to see the original source.</p>
+
+      <form id="search-form" role="search">
+        <label for="query" class="sr-only">Search Transformers documentation</label>
+        <div class="search-box">
+          <span class="search-icon" aria-hidden="true"></span>
+          <input id="query" type="search" name="q" placeholder="Search by topic or API name" maxlength="240" required>
+          <button id="submit" type="submit" disabled>Search <span aria-hidden="true">→</span></button>
+        </div>
+      </form>
+
+      <div class="suggestions" aria-label="Example searches">
+        <span>Try</span>
+        <button type="button" disabled>StaticCache</button>
+        <button type="button" disabled>chat templates</button>
+        <button type="button" disabled>beam search</button>
+      </div>
+    </section>
+
+    <section class="results" aria-labelledby="results-title">
+      <div class="results-header">
+        <h2 id="results-title">Source excerpts</h2>
+        <p id="status" role="status" aria-live="polite">Loading the browser index…</p>
+      </div>
+      <ol id="results"></ol>
+      <noscript><p>Enable JavaScript to search the documentation excerpts.</p></noscript>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <div>
+        <p>Search runs in your browser. It returns excerpts with zero LLM calls.</p>
+        <p>Excerpts by the Hugging Face team. Markdown formatting simplified. <a href="transformers-license.txt">Apache 2.0 license</a></p>
+      </div>
+      <a id="revision" href="https://github.com/huggingface/transformers/tree/469230357aab0f2b303b0d638c1f8d06edb14184/docs/source/en">Pinned docs <span aria-hidden="true">↗</span></a>
+    </div>
+  </footer>
+</body>
+</html>

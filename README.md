@@ -7,6 +7,11 @@ with their source paths and headings using zero LLM tokens.
 
 ## Demo
 
+[Try the browser search demo](https://haroonpuzhakkal07-pixel.github.io/hf-docs-qa/).
+It runs BM25 keyword search locally in your browser over selected excerpts from
+seven pinned documentation pages. Results link to their source lines. The
+Docker quickstart runs the full hybrid retrieval and reranking pipeline.
+
 [Watch the 75-second retrieval-only demo](https://youtu.be/LHcCyyEmmag).
 
 The demo shows a lookup and a two-step question against the pinned Transformers
