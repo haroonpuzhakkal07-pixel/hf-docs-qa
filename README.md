@@ -21,7 +21,7 @@ example. The live retrieval-only API does not perform evidence-based refusal.
 
 ## Quickstart
 
-Run these commands from the repository root in PowerShell with Docker running.
+Run these commands from a Git checkout in PowerShell with Docker running.
 The build downloads the pinned Transformers documentation and retrieval models.
 
 ```powershell
@@ -30,25 +30,37 @@ docker build `
   --build-arg "DOCS_RAG_SOURCE_DIRTY=$(if (git status --porcelain) { '1' } else { '0' })" `
   -t hf-docs-qa:local .
 
-docker run --rm --name hf-docs-qa-local -p 127.0.0.1:8005:8000 `
+$demoKey = [guid]::NewGuid().ToString('N')
+docker run --detach --rm --name hf-docs-qa-local -p 127.0.0.1:8005:8000 `
   -e DOCS_RAG_RETRIEVAL_ONLY=1 `
-  -e "DOCS_RAG_DEMO_KEY=$([guid]::NewGuid().ToString('N'))" `
+  -e "DOCS_RAG_DEMO_KEY=$demoKey" `
   hf-docs-qa:local
 ```
 
-Leave the container running. Once Uvicorn reports that startup is complete,
-check the API from a second PowerShell window.
+Run `docker logs hf-docs-qa-local` to check startup. Once the logs show
+`Application startup complete`, check the API from the same PowerShell window.
 
 ```powershell
 curl.exe --fail --silent --show-error http://127.0.0.1:8005/health
 ```
 
 The expected response is `{"status":"ok"}`. The API schema is available at
-`http://127.0.0.1:8005/docs`. Press Ctrl+C in the first window to stop the container.
+`http://127.0.0.1:8005/docs`. Try a short search using the temporary key from above.
+
+```powershell
+$body = @{ question = 'Where does the guide describe the SentencePiece space marker?' } | ConvertTo-Json
+$result = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8005/ask `
+  -Headers @{ 'X-Demo-Key' = $demoKey } -ContentType 'application/json' -Body $body
+$result.sources | Format-List
+$result.token_usage
+```
+
+The response includes ranked source excerpts and `total_tokens` is `0`.
+When finished, run `docker stop hf-docs-qa-local` and `Remove-Variable demoKey`.
 
 ## Current status
 
-Implemented through Day 20:
+Implementation and historical DEV evaluation:
 
 - Reviewed and selected 740 documentation pages.
 - Implemented conservative ingestion and two source-preserving chunking configurations.
@@ -68,6 +80,7 @@ Implemented through Day 20:
 - Added correctness and faithfulness judging. The 10-answer DEV trial produced valid JSON on the first attempt for all 5 correctness calls and both faithfulness calls.
 - Validated Gemini 3.1 Flash-Lite as the default judge. Its correctness verdicts agreed with 18 of 20 assistant-assisted DEV reference grades (90%). A separate faithfulness spot check matched all 3 expected verdicts.
 - Compared all six answer configurations on the same 45 DEV questions. The overall and per-question-type results are in [the Day 20 report](eval/results/summary.md).
+- Packaged the full retrieval pipeline in Docker and published a browser-only keyword search demo on GitHub Pages.
 
 Manual observations, failures and baseline results are recorded in NOTES.md.
 
@@ -108,6 +121,7 @@ flowchart TD
 - Source: https://github.com/huggingface/transformers
 - Commit: `469230357aab0f2b303b0d638c1f8d06edb14184`
 - Documentation directory: `docs/source/en`
+- Documentation copyright belongs to the Hugging Face team. See the [upstream Apache 2.0 license](docs/transformers-license.txt). The browser demo uses excerpts with simplified Markdown formatting and links to their original lines at the pinned revision.
 - Reviewed: 752 Markdown pages, including 531 model pages.
 - Selected: 740 pages; excluded: 12. All 531 model pages were included.
 

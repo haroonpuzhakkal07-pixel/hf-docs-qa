@@ -23,6 +23,7 @@ from src.ingest import write_documents
 
 
 def fetch_corpus() -> None:
+    """Check out the pinned English documentation into a new sparse clone."""
     if RAW_DIR.exists():
         raise FileExistsError(f"Corpus checkout already exists: {RAW_DIR}")
 
@@ -38,6 +39,7 @@ def fetch_corpus() -> None:
 
 
 def prefetch_models() -> None:
+    """Populate the build's cache with the pinned retrieval models and tokenizer."""
     AutoTokenizer.from_pretrained(
         EMBEDDING_MODEL,
         revision=EMBEDDING_REVISION,
@@ -59,6 +61,7 @@ def prefetch_models() -> None:
 
 
 def build_heading_indexes() -> None:
+    """Ingest the docs and build both indexes over the same heading-aware chunks."""
     processed = REPO_ROOT / "data" / "processed"
     documents = processed / "docs.jsonl"
 

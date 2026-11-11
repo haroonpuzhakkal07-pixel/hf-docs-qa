@@ -36,6 +36,7 @@ app = FastAPI(title="Transformers Docs QA", lifespan=lifespan)
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
+    """Confirm that the service has loaded its indexes and retrieval models."""
     return HealthResponse(status="ok")
 
 
@@ -71,6 +72,7 @@ def ask(
     request: Request,
     x_demo_key: Annotated[str | None, Header()] = None,
 ) -> AskResponse:
+    """Return ranked excerpts or a grounded answer, according to the server mode."""
     expected_key = os.environ.get("DOCS_RAG_DEMO_KEY")
     if not expected_key:
         raise HTTPException(status_code=503, detail="Demo access is not configured.")
