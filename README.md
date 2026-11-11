@@ -2,6 +2,15 @@
 
 A question-answering project over Hugging Face Transformers documentation, with planned comparisons of retrieval methods and answer evaluation.
 
+## Demo
+
+[Watch the 75-second retrieval-only demo](https://youtu.be/LHcCyyEmmag).
+
+The demo shows a lookup and a two-step question against the pinned Transformers
+documentation. Both live requests return ranked source excerpts with zero LLM
+usage. The closing segment illustrates the expected refusal with an offline
+example. The live retrieval-only API does not perform evidence-based refusal.
+
 ## Current status
 
 Implemented through Day 20:
