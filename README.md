@@ -1,6 +1,9 @@
 # hf-docs-qa
 
-A question-answering project over Hugging Face Transformers documentation, with planned comparisons of retrieval methods and answer evaluation.
+Transformers Docs QA helps developers find relevant passages in a pinned version
+of the Hugging Face Transformers documentation. It combines dense search and
+BM25, then reranks the results. The retrieval-only demo returns ranked excerpts
+with their source paths and headings using zero LLM tokens.
 
 ## Demo
 
@@ -10,6 +13,33 @@ The demo shows a lookup and a two-step question against the pinned Transformers
 documentation. Both live requests return ranked source excerpts with zero LLM
 usage. The closing segment illustrates the expected refusal with an offline
 example. The live retrieval-only API does not perform evidence-based refusal.
+
+## Quickstart
+
+Run these commands from the repository root in PowerShell with Docker running.
+The build downloads the pinned Transformers documentation and retrieval models.
+
+```powershell
+docker build `
+  --build-arg "DOCS_RAG_SOURCE_COMMIT=$(git rev-parse HEAD)" `
+  --build-arg "DOCS_RAG_SOURCE_DIRTY=$(if (git status --porcelain) { '1' } else { '0' })" `
+  -t hf-docs-qa:local .
+
+docker run --rm --name hf-docs-qa-local -p 127.0.0.1:8005:8000 `
+  -e DOCS_RAG_RETRIEVAL_ONLY=1 `
+  -e "DOCS_RAG_DEMO_KEY=$([guid]::NewGuid().ToString('N'))" `
+  hf-docs-qa:local
+```
+
+Leave the container running. Once Uvicorn reports that startup is complete,
+check the API from a second PowerShell window.
+
+```powershell
+curl.exe --fail --silent --show-error http://127.0.0.1:8005/health
+```
+
+The expected response is `{"status":"ok"}`. The API schema is available at
+`http://127.0.0.1:8005/docs`. Press Ctrl+C in the first window to stop the container.
 
 ## Current status
 
@@ -41,6 +71,32 @@ Manual observations, failures and baseline results are recorded in NOTES.md.
 - **Build the indexes.** During the Docker build, [`scripts/build_artifacts.py`](scripts/build_artifacts.py) fetches the pinned Transformers documentation and prefetches the pinned tokenizer, embedding model, and reranker. It ingests the selected pages, creates heading-aware passages, and builds a dense FAISS index and a BM25 index over those same passages.
 - **Serve questions.** The [Dockerfile](Dockerfile) starts Uvicorn with `src.api:app`. At startup, the [FastAPI app](src/api.py) checks the heading indexes and loads the embedding model and reranker. `GET /health` returns `{"status":"ok"}` after startup.
 - **Retrieve and answer.** `POST /ask` uses `hybrid_rerank_heading`. Dense and BM25 rankings are combined with reciprocal rank fusion, then a cross-encoder reranks the candidates. Up to five passages are sent to the grounded answer prompt. The Gemini completion layer supports a persistent response cache. The API returns the answer, cited source snippets, retrieval and completion timings, and token usage.
+
+```mermaid
+flowchart TD
+    Docs["Pinned Transformers documentation"] --> Chunks["Ingest and split by heading"]
+    Chunks --> Dense["FAISS dense index"]
+    Chunks --> BM25["BM25 keyword index"]
+
+    Ask["POST /ask with X-Demo-Key"] --> Dense
+    Ask --> BM25
+    Dense --> Fusion["Reciprocal rank fusion"]
+    BM25 --> Fusion
+    Fusion --> Rerank["Cross-encoder reranking"]
+
+    Rerank -->|Retrieval-only mode| Excerpts["Up to 3 ranked excerpts with source paths and headings"]
+    Rerank -->|Answer generation mode| Gemini["Grounded Gemini prompt with up to 5 passages"]
+    Gemini --> Answer["Answer with cited source excerpts"]
+```
+
+### Design choices
+
+- **Heading-aware chunks** preserve section context and make excerpts traceable
+  to their source headings.
+- **Hybrid search** combines dense retrieval for paraphrased questions with
+  BM25 for exact terms such as API names and parameter names.
+- **Cross-encoder reranking** scores each candidate passage together with the
+  question before selecting the excerpts shown by the API.
 
 ## Corpus
 
